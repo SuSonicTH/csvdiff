@@ -1,0 +1,50 @@
+Usage: csvdiff [OPTION] FILEA FILEB
+
+processes 2 csv files and outputs the differences
+
+Options:
+     -h, --help               display this help and exit
+     -v, --version            display version/license and exit
+     -l, --listHeader         print the file header and exit
+         --exitCodes          print a list of all exit codes
+
+         --config [file]      config file with list of arguments
+                              file is searched in current directory
+                              then in $HOME/.config/csvcut
+                              pauses argument processing an applies config
+                              then continues to apply command line arguments
+  input:
+     -s, --separator sep        use sep as input field separator
+         sep can be one of:
+            tab (\t)
+            comma (,) {Default}
+            semicolon (;)
+            pipe (|)
+
+     -q, --quote no             no quouting {default for performance}
+     -q, --quote single         use single quouttes (')
+     -q, --quote double         use double quoutes (")
+
+     -h, --header               use given heder (field1,field2,...)
+     -n, --noHeader             file has no header
+         --skipLines list       skip lines numbers in list
+                                indices as 0-based, header has zero index
+         --inputLimit  lim      limit the input processing to lim lines
+         --lengths [1,2,3]      comma separated list of field lengths
+                                processes input as fixed filed (record) length
+
+         --extraLF              with --lengths to read an extra end of line
+         --extraCRLF            with --lengths to read 2 extra EOL characters
+
+  processing:
+     -I, --include [1,2,3]     comma separated list of field names/indices 
+                               use backshlash to escape numeric field names
+                               can be used multiple times
+                               numeric ranges can be used e.g. 3-6
+                               cannot be used with --exclude
+
+     -E, --exclude [1,2,3]     comma separated list of field names/indices 
+                               same rules as --include
+                               but removes given columns from output
+
+         --trim                removes space & tab characters from start & end
