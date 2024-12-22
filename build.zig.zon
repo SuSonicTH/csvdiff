@@ -1,0 +1,23 @@
+.{
+    .name = "csvdiff",
+    .version = "0.1.0",
+
+    .dependencies = .{
+        .CsvLine = .{
+            .url = "https://github.com/SuSonicTH/zigCsvLine/archive/ea75db20ac41a68f72ebf605e4cb10e5af719cd1.tar.gz",
+            .hash = "1220f0c9529cbb73cb3c762add6f2fd0cf13f4de0048ecb5bf3d41fb492603f87eed",
+        },
+        .MemMapper = .{
+            .url = "https://github.com/SuSonicTH/zigMemMapper/archive/9810b04516fd59bfdedd89ae2ad4374015fbd158.tar.gz",
+            .hash = "1220dc6999d2edd1cd38a75bf6e4cfad758dd82d4c89f72e258fff4799309af30227",
+        },
+    },
+
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "README.md",
+        "LICENSE.txt",
+    },
+}
