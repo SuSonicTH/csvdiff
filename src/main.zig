@@ -40,21 +40,132 @@ fn _main() !void {
 
     try calculateDiff();
 
+    const stderr = std.io.getStdOut().writer();
     if (options.time) {
         const timeNeeded = @as(f32, @floatFromInt(timer.lap())) / 1000000.0;
-        const stderr = std.io.getStdErr().writer();
         if (timeNeeded > 1000) {
             _ = try stderr.print("time needed: {d:0.2}s\n", .{timeNeeded / 1000.0});
         } else {
             _ = try stderr.print("time needed: {d:0.2}ms\n", .{timeNeeded});
         }
     }
+
+    if (options.memory) {
+        const used = @as(f64, @floatFromInt(arena.queryCapacity()));
+        if (used > 1024 * 1024 * 1024) {
+            _ = try stderr.print("memory allocated: {d:0.2} GB\n", .{used / 1024.0 / 1024.0 / 1024.0});
+        } else if (used > 1024 * 1024) {
+            _ = try stderr.print("memory allocated: {d:0.2} MB\n", .{used / 1024.0 / 1024.0});
+        } else if (used > 1024) {
+            _ = try stderr.print("memory allocated: {d:0.2} KB\n", .{used / 1024.0});
+        } else {
+            _ = try stderr.print("memory allocated: {d:0} B\n", .{used});
+        }
+    }
 }
 
 const MapEntry = struct {
-    line: []const u8,
+    line: ?[]const u8,
+    hash: u64,
+    count: usize,
 };
 
+const Seeds: []u64 = .{
+    9628788404228902345,
+    3600497308183539549,
+    5095947213571367657,
+    7333372431925412309,
+    8402791880033648526,
+};
+
+const Map = struct {
+    allocator: std.mem.Allocator,
+    data: []MapEntry,
+    mask: u64,
+
+    fn init(initialSize: usize, alloc: std.mem.Allocator) !Map {
+        _ = initialSize;
+        const map: Map = .{
+            .allocator = alloc,
+            .data = try allocator.alloc(MapEntry, 1 << 24),
+            .mask = (1 << 24) - 1,
+        };
+        @memset(map.data, .{
+            .line = null,
+            .hash = 0,
+            .count = 0,
+        });
+        return map;
+    }
+
+    fn deinit(self: *Map) void {
+        self.allocator.free(self.data);
+    }
+
+    fn put(self: *Map, line: []const u8) !void {
+        const hash = std.hash.XxHash64.hash(0, line);
+        const index = hash & self.mask;
+        //try std.io.getStdOut().writer().print("{s}:{d}:{d}:{d}\n", .{ line, hash, self.mask, index });
+        var entry: *MapEntry = &self.data[index];
+
+        if (entry.line == null) {
+            setEntry(entry, hash, line);
+            //_ = try std.io.getStdOut().writer().print("OK {s}:{d}:{d}\n", .{ line, hash, index });
+        } else if (isSame(entry, hash, line)) {
+            //_ = try std.io.getStdOut().writer().print("SAME {s}:{d}:{d}\n", .{ line, hash, index });
+            entry.count += 1;
+            return;
+        } else {
+            //_ = try std.io.getStdOut().writer().print("COLLISION {s}:{d}:{d}\n", .{ line, hash, index });
+            if (!self.linearProbe(index + 1, self.data.len, hash, line)) {
+                if (!self.linearProbe(0, index, hash, line)) {
+                    @panic("No space left");
+                }
+            }
+        }
+    }
+
+    fn isSame(entry: *MapEntry, hash: u64, line: []const u8) bool {
+        if (entry.hash == hash and entry.line.?.len == line.len and std.mem.eql(u8, entry.line.?, line)) {
+            return true;
+        }
+        return false;
+    }
+
+    fn setEntry(entry: *MapEntry, hash: u64, line: []const u8) void {
+        entry.line = line;
+        entry.count = 1;
+        entry.hash = hash;
+    }
+
+    inline fn linearProbe(self: *Map, start: u64, end: u64, hash: u64, line: []const u8) bool {
+        var index: u64 = start;
+        while (index < end) {
+            const entry = &self.data[index];
+            if (entry.line == null) {
+                setEntry(entry, hash, line);
+                return true;
+            } else if (isSame(entry, hash, line)) {
+                entry.count += 1;
+                return true;
+            }
+            index += 1;
+        }
+        return false;
+    }
+
+    fn get(self: *Map, line: []const u8) MapEntry {
+        const hash = std.hash.XxHash64.hash(0, line);
+        const index = hash & self.mask;
+        return self.data[index];
+    }
+};
+
+fn printEntry(entry: *MapEntry) !void {
+    _ = try std.io.getStdOut().writer().print("hash: {d}, index: {d}, count: {d}, line: {s}", .{ entry.*.hash, entry.*.hash & ((1 << 24) - 1), entry.*.count, entry.*.line.? });
+}
+
+//std.hash.XxHash64.init(seed: u64)
 const FileReader = struct {
     file: std.fs.File,
     memMapper: MemMapper,
@@ -107,14 +218,33 @@ const FileReader = struct {
 };
 
 fn calculateDiff() !void {
-    var map = std.StringHashMap(MapEntry).init(allocator);
+    var map = try Map.init(16777216, allocator);
     defer map.deinit();
     var fileA = try FileReader.init(options.inputFiles.items[0]);
     defer fileA.deinit();
 
+    //const writer = std.io.getStdOut().writer();
     while (try fileA.getLine()) |line| {
-        try map.put(line, .{ .line = line });
+        try map.put(line);
+        //_ = try writer.print("{s}:{any}\n", .{ line, map.get(line) });
     }
 
-    _ = try std.io.getStdOut().writer().print(">{any}<\n", .{map});
+    //_ = try std.io.getStdOut().writer().print(">{any}<\n", .{map});
+}
+
+//fn calculateDiff() !void {
+//    var map = std.StringHashMap(MapEntry).init(allocator);
+//    defer map.deinit();
+//    var fileA = try FileReader.init(options.inputFiles.items[0]);
+//    defer fileA.deinit();
+//
+//    while (try fileA.getLine()) |line| {
+//        try map.put(line, .{ .line = line });
+//    }
+//
+//    //_ = try std.io.getStdOut().writer().print(">{any}<\n", .{map});
+//}
+
+test "hasher" {
+    try std.testing.expectEqual(16777215, (1 << 24) - 1);
 }

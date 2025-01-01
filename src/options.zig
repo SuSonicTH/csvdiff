@@ -26,6 +26,7 @@ pub const Options = struct {
     inputFiles: std.ArrayList([]const u8),
     outputName: ?[]const u8 = null,
     time: bool = false,
+    memory: bool = false,
 
     pub fn init(allocator: std.mem.Allocator) !Options {
         return .{
