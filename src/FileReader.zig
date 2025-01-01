@@ -23,6 +23,12 @@ pub fn init(fileName: []const u8) !Self {
     };
 }
 
+pub fn deinit(self: *Self) void {
+    self.memMapper.unmap(self.data);
+    self.memMapper.deinit();
+    self.file.close();
+}
+
 pub fn getLine(self: *Self) !?[]const u8 {
     if (self.pos >= self.data.len) {
         return null;
@@ -47,8 +53,25 @@ pub fn getLine(self: *Self) !?[]const u8 {
     }
 }
 
-pub fn deinit(self: *Self) void {
-    self.memMapper.unmap(self.data);
-    self.memMapper.deinit();
-    self.file.close();
+pub fn reset(self: *Self) void {
+    self.pos = 0;
+}
+
+pub fn getAproximateLineCount(self: *Self, samples: usize) !usize {
+    var len: usize = 0;
+    var count: usize = 0;
+    while (try self.getLine()) |line| {
+        len += line.len;
+        count += 1;
+        if (count == samples) break;
+    }
+    self.reset();
+    const average = len / count;
+    return self.data.len / average;
+}
+
+test "average" {
+    var file = try init("../csvcut/VTAS_SINGLE_DB.csv");
+    defer file.deinit();
+    //try std.testing.expectEqual(14976460, try file.getAproximateLineCount(100));
 }

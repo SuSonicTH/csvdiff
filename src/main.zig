@@ -66,16 +66,39 @@ fn _main() !void {
 }
 
 fn calculateDiff() !void {
-    var set = try HashSet.init(16777216, allocator);
-    defer set.deinit();
     var fileA = try FileReader.init(options.inputFiles.items[0]);
     defer fileA.deinit();
+    var set = try HashSet.init(try fileA.getAproximateLineCount(100), allocator);
+    defer set.deinit();
 
     //const writer = std.io.getStdOut().writer();
     while (try fileA.getLine()) |line| {
         try set.put(line);
-        //_ = try writer.print("{s}:{any}\n", .{ line, map.get(line) });
     }
 
-    _ = try std.io.getStdOut().writer().print("{d},{d},{d}\n", .{ set.count, set.data.len, set.load() });
+    var fileB = try FileReader.init(options.inputFiles.items[1]);
+    defer fileB.deinit();
+    while (try fileB.getLine()) |line| {
+        if (set.get(line)) |entry| {
+            if (entry.count > 0) {
+                entry.count -= 1;
+            } else {
+                _ = try std.io.getStdOut().writer().print("+{s}\n", .{line});
+            }
+        } else {
+            _ = try std.io.getStdOut().writer().print("+{s}\n", .{line});
+        }
+    }
+    for (set.data) |entry| {
+        if (entry.line != null and entry.count > 0) {
+            for (0..entry.count) |_| {
+                _ = try std.io.getStdOut().writer().print("-{s}\n", .{entry.line.?});
+            }
+        }
+    }
+    //_ = try std.io.getStdOut().writer().print("{d},{d},{d}\n", .{ set.count, set.data.len, set.load() });
+}
+
+test {
+    std.testing.refAllDecls(@This());
 }
