@@ -4,7 +4,7 @@ const Options = @import("options.zig").Options;
 const ArgumentParser = @import("arguments.zig").Parser;
 const Utf8Output = @import("Utf8Output.zig");
 const config = @import("config.zig");
-const MemMapper = @import("MemMapper").MemMapper;
+const FileReader = @import("FileReader.zig");
 
 pub fn main() !void {
     _main() catch |err| switch (err) {
@@ -78,17 +78,20 @@ const Seeds: []u64 = .{
     8402791880033648526,
 };
 
+//todo: implement resizing
+//todo: implement initial size to bitcount(size of data/mask)
 const Map = struct {
     allocator: std.mem.Allocator,
     data: []MapEntry,
     mask: u64,
+    count: u64 = 0,
 
-    fn init(initialSize: usize, alloc: std.mem.Allocator) !Map {
+    pub fn init(initialSize: usize, alloc: std.mem.Allocator) !Map {
         _ = initialSize;
         const map: Map = .{
             .allocator = alloc,
-            .data = try allocator.alloc(MapEntry, 1 << 24),
-            .mask = (1 << 24) - 1,
+            .data = try allocator.alloc(MapEntry, 1 << 25),
+            .mask = (1 << 25) - 1,
         };
         @memset(map.data, .{
             .line = null,
@@ -98,30 +101,28 @@ const Map = struct {
         return map;
     }
 
-    fn deinit(self: *Map) void {
+    pub fn deinit(self: *Map) void {
         self.allocator.free(self.data);
     }
 
-    fn put(self: *Map, line: []const u8) !void {
+    pub fn put(self: *Map, line: []const u8) !void {
         const hash = std.hash.XxHash64.hash(0, line);
         const index = hash & self.mask;
-        //try std.io.getStdOut().writer().print("{s}:{d}:{d}:{d}\n", .{ line, hash, self.mask, index });
         var entry: *MapEntry = &self.data[index];
 
         if (entry.line == null) {
             setEntry(entry, hash, line);
-            //_ = try std.io.getStdOut().writer().print("OK {s}:{d}:{d}\n", .{ line, hash, index });
+            self.count += 1;
         } else if (isSame(entry, hash, line)) {
-            //_ = try std.io.getStdOut().writer().print("SAME {s}:{d}:{d}\n", .{ line, hash, index });
             entry.count += 1;
             return;
         } else {
-            //_ = try std.io.getStdOut().writer().print("COLLISION {s}:{d}:{d}\n", .{ line, hash, index });
             if (!self.linearProbe(index + 1, self.data.len, hash, line)) {
                 if (!self.linearProbe(0, index, hash, line)) {
                     @panic("No space left");
                 }
             }
+            self.count += 1;
         }
     }
 
@@ -154,68 +155,23 @@ const Map = struct {
         return false;
     }
 
-    fn get(self: *Map, line: []const u8) MapEntry {
+    pub fn get(self: *Map, line: []const u8) MapEntry {
         const hash = std.hash.XxHash64.hash(0, line);
         const index = hash & self.mask;
         return self.data[index];
+    }
+
+    pub fn load(self: *Map) f32 {
+        if (self.count == 0) {
+            return 0.0;
+        }
+        return @as(f32, @floatFromInt(self.count)) / @as(f32, @floatFromInt(self.data.len));
     }
 };
 
 fn printEntry(entry: *MapEntry) !void {
     _ = try std.io.getStdOut().writer().print("hash: {d}, index: {d}, count: {d}, line: {s}", .{ entry.*.hash, entry.*.hash & ((1 << 24) - 1), entry.*.count, entry.*.line.? });
 }
-
-//std.hash.XxHash64.init(seed: u64)
-const FileReader = struct {
-    file: std.fs.File,
-    memMapper: MemMapper,
-    data: []const u8,
-    pos: usize,
-
-    fn init(fileName: []const u8) !FileReader {
-        var file = std.fs.cwd().openFile(options.inputFiles.items[0], .{}) catch |err| ExitCode.couldNotOpenInputFile.printErrorAndExit(.{ fileName, err });
-        errdefer file.close();
-        var memMapper = try MemMapper.init(file, false);
-        errdefer memMapper.deinit();
-
-        return .{
-            .file = file,
-            .memMapper = memMapper,
-            .data = try memMapper.map(u8, .{}),
-            .pos = 0,
-        };
-    }
-
-    fn getLine(self: *FileReader) !?[]const u8 {
-        if (self.pos >= self.data.len) {
-            return null;
-        }
-        const start = self.pos;
-        while (self.pos < self.data.len and self.data[self.pos] != '\r' and self.data[self.pos] != '\n') {
-            self.pos += 1;
-        }
-        if (self.data[self.pos] == '\r') {
-            const end = self.pos;
-            self.pos += 1;
-            if (self.data[self.pos] == '\n') {
-                self.pos += 1;
-            }
-            return self.data[start..end];
-        } else if (self.data[self.pos] == '\n') {
-            const end = self.pos;
-            self.pos += 1;
-            return self.data[start..end];
-        } else {
-            return self.data[start .. self.pos - 1];
-        }
-    }
-
-    fn deinit(self: *FileReader) void {
-        self.memMapper.unmap(self.data);
-        self.memMapper.deinit();
-        self.file.close();
-    }
-};
 
 fn calculateDiff() !void {
     var map = try Map.init(16777216, allocator);
@@ -229,7 +185,7 @@ fn calculateDiff() !void {
         //_ = try writer.print("{s}:{any}\n", .{ line, map.get(line) });
     }
 
-    //_ = try std.io.getStdOut().writer().print(">{any}<\n", .{map});
+    _ = try std.io.getStdOut().writer().print("{d},{d},{d}\n", .{ map.count, map.data.len, map.load() });
 }
 
 //fn calculateDiff() !void {
