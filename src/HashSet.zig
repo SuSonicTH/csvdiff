@@ -8,9 +8,6 @@ pub const SetEntry = struct {
     count: u64,
 };
 
-//todo: implement resizing
-//todo: implement initial size to bitcount(size of data/mask)
-
 allocator: std.mem.Allocator,
 data: []SetEntry,
 mask: u64,
@@ -19,18 +16,18 @@ size: u6,
 
 pub fn init(initialSize: usize, allocator: std.mem.Allocator) !Self {
     const size = getNumberOfBits(initialSize);
-    const map: Self = .{
+    const set: Self = .{
         .allocator = allocator,
         .data = try allocator.alloc(SetEntry, @as(u64, 1) << size),
         .mask = (@as(u64, 1) << size) - 1,
         .size = size,
     };
-    @memset(map.data, .{
+    @memset(set.data, .{
         .line = null,
         .hash = 0,
         .count = 0,
     });
-    return map;
+    return set;
 }
 
 fn getNumberOfBits(size: usize) u6 {
@@ -49,25 +46,58 @@ pub fn deinit(self: *Self) void {
 
 pub fn put(self: *Self, line: []const u8) !void {
     const hash = std.hash.XxHash64.hash(0, line);
+    try self.putHash(line, hash, 1);
+    if (self.load() > 0.7) {
+        try self.resize();
+    }
+}
+
+inline fn putHash(self: *Self, line: []const u8, hash: u64, count: u64) !void {
     const index = hash & self.mask;
     var entry: *SetEntry = &self.data[index];
 
     if (entry.line == null) {
-        updateEntry(entry, hash, line);
+        updateEntry(entry, hash, line, count);
         self.count += 1;
     } else if (isSame(entry, hash, line)) {
         entry.count += 1;
         return;
     } else {
         if (self.linearProbe(index + 1, self.data.len, hash, line)) |nextEntry| {
-            updateEntry(nextEntry, hash, line);
+            updateEntry(nextEntry, hash, line, count);
         } else if (self.linearProbe(0, index, hash, line)) |nextEntry| {
-            updateEntry(nextEntry, hash, line);
+            updateEntry(nextEntry, hash, line, count);
         } else {
             @panic("HashSet is full");
         }
         self.count += 1;
     }
+}
+
+fn resize(self: *Self) !void {
+    if (self.size >= 64) {
+        return error.MaximumHashSetSizeReached;
+    }
+
+    self.size += 1;
+    self.mask = (@as(u64, 1) << self.size) - 1;
+    self.count = 0;
+
+    const old = self.data;
+    self.data = try self.allocator.alloc(SetEntry, @as(u64, 1) << self.size);
+    @memset(self.data, .{
+        .line = null,
+        .hash = 0,
+        .count = 0,
+    });
+
+    for (old) |entry| {
+        if (entry.line != null) {
+            try self.putHash(entry.line.?, entry.hash, entry.count);
+        }
+    }
+
+    self.allocator.free(old);
 }
 
 fn isSame(entry: *SetEntry, hash: u64, line: []const u8) bool {
@@ -77,13 +107,13 @@ fn isSame(entry: *SetEntry, hash: u64, line: []const u8) bool {
     return false;
 }
 
-fn updateEntry(entry: *SetEntry, hash: u64, line: []const u8) void {
+fn updateEntry(entry: *SetEntry, hash: u64, line: []const u8, count: u64) void {
     if (entry.line == null) {
         entry.line = line;
-        entry.count = 1;
+        entry.count = count;
         entry.hash = hash;
     } else {
-        entry.count += 1;
+        entry.count += count;
     }
 }
 

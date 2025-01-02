@@ -29,7 +29,6 @@ const Argument = enum {
     @"-o",
     @"--output",
     @"--time",
-    @"--memory",
 };
 
 const Separator = enum {
@@ -111,9 +110,6 @@ pub const Parser = struct {
                     },
                     .@"--time" => {
                         options.time = true;
-                    },
-                    .@"--memory" => {
-                        options.memory = true;
                     },
                 }
             } else {

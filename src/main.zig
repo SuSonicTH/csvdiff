@@ -14,7 +14,6 @@ pub fn main() !void {
     };
 }
 
-var allocator: std.mem.Allocator = undefined;
 var options: Options = undefined;
 
 fn _main() !void {
@@ -23,9 +22,7 @@ fn _main() !void {
     defer Utf8Output.deinit();
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    var arena = std.heap.ArenaAllocator.init(gpa.allocator());
-    defer arena.deinit();
-    allocator = arena.allocator();
+    const allocator = gpa.allocator();
 
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
@@ -39,7 +36,7 @@ fn _main() !void {
     try ArgumentParser.parse(&options, args, allocator);
     try ArgumentParser.validateArguments(&options);
 
-    try calculateDiff();
+    try calculateDiff(allocator);
 
     const stderr = std.io.getStdOut().writer();
     if (options.time) {
@@ -50,22 +47,9 @@ fn _main() !void {
             _ = try stderr.print("time needed: {d:0.2}ms\n", .{timeNeeded});
         }
     }
-
-    if (options.memory) {
-        const used = @as(f64, @floatFromInt(arena.queryCapacity()));
-        if (used > 1024 * 1024 * 1024) {
-            _ = try stderr.print("memory allocated: {d:0.2} GB\n", .{used / 1024.0 / 1024.0 / 1024.0});
-        } else if (used > 1024 * 1024) {
-            _ = try stderr.print("memory allocated: {d:0.2} MB\n", .{used / 1024.0 / 1024.0});
-        } else if (used > 1024) {
-            _ = try stderr.print("memory allocated: {d:0.2} KB\n", .{used / 1024.0});
-        } else {
-            _ = try stderr.print("memory allocated: {d:0} B\n", .{used});
-        }
-    }
 }
 
-fn calculateDiff() !void {
+fn calculateDiff(allocator: std.mem.Allocator) !void {
     var fileA = try FileReader.init(options.inputFiles.items[0]);
     defer fileA.deinit();
     var set = try HashSet.init(try fileA.getAproximateLineCount(100), allocator);
