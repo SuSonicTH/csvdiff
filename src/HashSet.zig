@@ -5,7 +5,7 @@ const Self = @This();
 pub const SetEntry = struct {
     line: ?[]const u8,
     hash: u64,
-    count: usize,
+    count: u64,
 };
 
 //todo: implement resizing

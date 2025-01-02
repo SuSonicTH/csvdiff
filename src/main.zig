@@ -96,7 +96,7 @@ fn calculateDiff() !void {
             }
         }
     }
-    //_ = try std.io.getStdOut().writer().print("{d},{d},{d}\n", .{ set.count, set.data.len, set.load() });
+    _ = try std.io.getStdOut().writer().print("setStat: {d},{d},{d}\n", .{ set.count, set.data.len, set.load() });
 }
 
 test {
