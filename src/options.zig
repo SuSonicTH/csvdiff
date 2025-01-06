@@ -1,4 +1,5 @@
 const std = @import("std");
+const CsvLine = @import("CsvLine").CsvLine;
 
 const Selection = union(enum) {
     name: []const u8,
@@ -8,18 +9,18 @@ const Selection = union(enum) {
 const OptionError = error{
     NoSuchField,
     NoHeader,
-    MoreThanOneEqualInFilter,
 };
 
 pub const Options = struct {
     allocator: std.mem.Allocator,
+    csvLine: ?CsvLine = null,
     inputSeparator: [1]u8 = .{','},
     inputQuoute: ?[1]u8 = null,
     fileHeader: bool = true,
     header: ?[][]const u8 = null,
-    includedFields: ?SelectionList = null,
+    keyFields: ?SelectionList = null,
     excludedFields: ?SelectionList = null,
-    selectedIndices: ?[]usize = null,
+    keyIndices: ?[]usize = null,
     excludedIndices: ?std.AutoHashMap(usize, bool) = null,
     trim: bool = false,
     listHeader: bool = false,
@@ -36,11 +37,11 @@ pub const Options = struct {
 
     pub fn deinit(self: *Options) void {
         self.inputFiles.deinit();
-        if (self.includedFields) |selectedFields| {
-            selectedFields.deinit();
+        if (self.keyFields) |keyFields| {
+            keyFields.deinit();
         }
-        if (self.selectedIndices) |selectedIndices| {
-            self.allocator.free(selectedIndices);
+        if (self.keyIndices) |keyIndices| {
+            self.allocator.free(keyIndices);
         }
         if (self.excludedFields) |selectedFields| {
             selectedFields.deinit();
@@ -51,57 +52,52 @@ pub const Options = struct {
         if (self.header) |header| {
             self.allocator.free(header);
         }
+        if (self.csvLine != null) {
+            self.csvLine.?.free();
+        }
+    }
+
+    fn getCsvLine(self: *Options) !*CsvLine {
+        if (self.csvLine == null) {
+            self.csvLine = try CsvLine.init(self.allocator, .{ .trim = self.trim });
+        }
+        return &(self.csvLine.?);
     }
 
     pub fn setHeader(self: *Options, header: []const u8) !void {
-        //self.header = try self.allocator.dupe([]const u8, try (try self.getCsvLine()).parse(header));
-        _ = self;
-        _ = header;
+        self.header = try self.allocator.dupe([]const u8, try (try self.getCsvLine()).parse(header));
     }
 
     pub fn setHeaderFields(self: *Options, fields: [][]const u8) !void {
         self.header = try self.allocator.dupe([]const u8, fields);
     }
 
-    pub fn addInclude(self: *Options, fields: []const u8) !void {
-        if (self.excludedFields != null) {
-            return error.IncludeAndExcludeTogether;
-        } else if (self.includedFields == null) {
-            self.includedFields = try SelectionList.init(self.allocator);
+    pub fn addKey(self: *Options, fields: []const u8) !void {
+        if (self.keyFields == null) {
+            self.keyFields = try SelectionList.init(self.allocator);
         }
-        _ = fields;
-        //for ((try (try self.getCsvLine()).parse(fields))) |field| {
-        //    try self.includedFields.?.append(field);
-        //}
+        for ((try (try self.getCsvLine()).parse(fields))) |field| {
+            try self.keyFields.?.append(field);
+        }
     }
 
     pub fn addExclude(self: *Options, fields: []const u8) !void {
-        if (self.includedFields != null) {
-            return error.IncludeAndExcludeTogether;
-        } else if (self.excludedFields == null) {
+        if (self.excludedFields == null) {
             self.excludedFields = try SelectionList.init(self.allocator);
         }
-        _ = fields;
-        //for ((try (try self.getCsvLine()).parse(fields))) |field| {
-        //    try self.excludedFields.?.append(field);
-        //}
+        for ((try (try self.getCsvLine()).parse(fields))) |field| {
+            try self.excludedFields.?.append(field);
+        }
     }
 
     pub fn calculateFieldIndices(self: *Options) !void {
-        if (self.includedFields != null) {
-            self.selectedIndices = try self.includedFields.?.calculateIndices(self.header);
-        } else if (self.excludedFields != null) {
+        if (self.keyFields != null) {
+            self.keyIndices = try self.includedFields.?.calculateIndices(self.header);
+        }
+        if (self.excludedFields != null) {
             self.excludedIndices = std.AutoHashMap(usize, bool).init(self.allocator);
             for (try self.excludedFields.?.calculateIndices(self.header)) |index| {
                 try self.excludedIndices.?.put(index, true);
-            }
-        }
-        if (self.anonymizedFields != null) {
-            self.anonymizedIndices = try self.anonymizedFields.?.calculateIndices(self.header);
-        }
-        if (self.filters != null) {
-            for (0..self.filters.?.items.len) |i| {
-                try self.filters.?.items[i].calculateIndices(self.header);
             }
         }
     }
@@ -112,13 +108,6 @@ pub const Options = struct {
 
     pub fn setOutputLimit(self: *Options, value: []const u8) !void {
         self.outputLimit = try std.fmt.parseInt(usize, value, 10);
-    }
-
-    pub fn setLenghts(self: *Options, value: []const u8) !void {
-        self.lengths = try std.ArrayList(usize).initCapacity(self.allocator, 16);
-        for (try (try self.getCsvLine()).parse(value)) |len| {
-            try self.lengths.?.append(try std.fmt.parseInt(usize, len, 10));
-        }
     }
 };
 

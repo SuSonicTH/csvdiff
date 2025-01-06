@@ -17,9 +17,9 @@ const Argument = enum {
     @"--header",
     @"-n",
     @"--noHeader",
-    @"-I",
-    @"--include",
-    @"-E",
+    @"-k",
+    @"--key",
+    @"-e",
     @"--exclude",
     @"--trim",
     @"-l",
@@ -83,23 +83,12 @@ pub const Parser = struct {
                         skipNext();
                     },
                     .@"-n", .@"--noHeader" => options.fileHeader = false,
-                    .@"-I", .@"--include" => {
-                        options.addInclude(try argumentValue(args, index, arg)) catch |err| {
-                            switch (err) {
-                                error.IncludeAndExcludeTogether => try ExitCode.includeAndExcludeTogether.printErrorAndExit(.{}),
-                                else => return err,
-                            }
-                        };
+                    .@"-k", .@"--key" => {
+                        try options.addKey(try argumentValue(args, index, arg));
                         skipNext();
                     },
-                    .@"-E", .@"--exclude" => {
-                        options.addExclude(try argumentValue(args, index, arg)) catch |err| {
-                            switch (err) {
-                                error.IncludeAndExcludeTogether => try ExitCode.includeAndExcludeTogether.printErrorAndExit(.{}),
-                                else => return err,
-                            }
-                            return err;
-                        };
+                    .@"-e", .@"--exclude" => {
+                        try options.addExclude(try argumentValue(args, index, arg));
                         skipNext();
                     },
                     .@"--exitCodes" => try ExitCode.printExitCodes(),

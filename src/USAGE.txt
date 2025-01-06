@@ -10,7 +10,7 @@ Options:
 
          --config [file]      config file with list of arguments
                               file is searched in current directory
-                              then in $HOME/.config/csvcut
+                              then in $HOME/.config/csvdiff
                               pauses argument processing an applies config
                               then continues to apply command line arguments
   input:
@@ -37,14 +37,14 @@ Options:
          --extraCRLF            with --lengths to read 2 extra EOL characters
 
   processing:
-     -I, --include [1,2,3]     comma separated list of field names/indices 
+     -k, --key [1,2,3]         fileds to use as primary key
+                               comma separated list of field names/indices 
                                use backshlash to escape numeric field names
                                can be used multiple times
                                numeric ranges can be used e.g. 3-6
-                               cannot be used with --exclude
 
-     -E, --exclude [1,2,3]     comma separated list of field names/indices 
-                               same rules as --include
-                               but removes given columns from output
+     -e, --exclude [1,2,3]     fields to exclude from diff check
+                               comma separated list of field names/indices 
+                               same rules as --key
 
          --trim                removes space & tab characters from start & end
