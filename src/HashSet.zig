@@ -173,3 +173,59 @@ test "getNumberOfBits" {
     try std.testing.expectEqual(11, getNumberOfBits(1 << 10));
     try std.testing.expectEqual(24, getNumberOfBits(14976460));
 }
+
+test "put/get" {
+    var set = try init(16, std.testing.allocator);
+    defer set.deinit();
+
+    try set.put("one");
+    try set.put("two");
+    try set.put("three");
+    try set.put("four");
+
+    try std.testing.expectEqual("one", set.get("one").?.line.?);
+    try std.testing.expectEqual("two", set.get("two").?.line.?);
+    try std.testing.expectEqual("three", set.get("three").?.line.?);
+    try std.testing.expectEqual("four", set.get("four").?.line.?);
+
+    try std.testing.expectEqual(null, set.get("not therer"));
+    try std.testing.expectEqual(null, set.get("also not therer"));
+    try std.testing.expectEqual(null, set.get("one1"));
+    try std.testing.expectEqual(null, set.get("2two"));
+
+    try set.put("two");
+    try set.put("three");
+    try set.put("three");
+    try set.put("four");
+    try set.put("four");
+    try set.put("four");
+
+    try std.testing.expectEqual(1, set.get("one").?.count);
+    try std.testing.expectEqual(2, set.get("two").?.count);
+    try std.testing.expectEqual(3, set.get("three").?.count);
+    try std.testing.expectEqual(4, set.get("four").?.count);
+}
+
+test "resize" {
+    var set = try init(2, std.testing.allocator);
+    defer set.deinit();
+
+    try set.put("one");
+    try std.testing.expectEqual("one", set.get("one").?.line.?);
+    try std.testing.expectEqual(1, set.count);
+    try std.testing.expectEqual(2, set.size);
+
+    try set.put("two");
+    try std.testing.expectEqual("two", set.get("two").?.line.?);
+    try std.testing.expectEqual(2, set.count);
+    try std.testing.expectEqual(2, set.size);
+
+    try set.put("three"); //triggers resize
+    try std.testing.expectEqual("three", set.get("three").?.line.?);
+    try std.testing.expectEqual(3, set.count);
+    try std.testing.expectEqual(3, set.size);
+
+    //one and two are still there after resize
+    try std.testing.expectEqual("one", set.get("one").?.line.?);
+    try std.testing.expectEqual("two", set.get("two").?.line.?);
+}

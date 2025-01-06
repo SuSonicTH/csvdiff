@@ -217,20 +217,21 @@ test "reads it" {
 
     const expectEqualStrings = std.testing.expectEqualStrings;
 
-    try expectEqualStrings("--header", arguments.items[0]);
-    try expectEqualStrings("1,2,3", arguments.items[1]);
-    try expectEqualStrings("--trim", arguments.items[2]);
-    try expectEqualStrings("-I", arguments.items[3]);
-    try expectEqualStrings("quouted argument, with , spaces", arguments.items[4]);
-    try expectEqualStrings("--include", arguments.items[5]);
-    try expectEqualStrings("another one with spaces", arguments.items[6]);
-    try expectEqualStrings("--separator", arguments.items[7]);
-    try expectEqualStrings("tab", arguments.items[8]);
-    try expectEqualStrings("this is 'escaped'", arguments.items[9]);
-    try expectEqualStrings("--header", arguments.items[10]);
-    try expectEqualStrings("one,two,three", arguments.items[11]);
-    try expectEqualStrings("this_is#not_a_comment", arguments.items[12]);
-    try expectEqualStrings("#also_not_a_comment", arguments.items[13]);
-    try expectEqualStrings("--include", arguments.items[14]);
-    try expectEqualStrings("eins,zwei,drei", arguments.items[15]);
+    try expectEqualStrings("test/test.config", arguments.items[0]);
+    try expectEqualStrings("--header", arguments.items[1]);
+    try expectEqualStrings("1,2,3", arguments.items[2]);
+    try expectEqualStrings("--trim", arguments.items[3]);
+    try expectEqualStrings("-I", arguments.items[4]);
+    try expectEqualStrings("quouted argument, with , spaces", arguments.items[5]);
+    try expectEqualStrings("--include", arguments.items[6]);
+    try expectEqualStrings("another one with spaces", arguments.items[7]);
+    try expectEqualStrings("--separator", arguments.items[8]);
+    try expectEqualStrings("tab", arguments.items[9]);
+    try expectEqualStrings("this is 'escaped'", arguments.items[10]);
+    try expectEqualStrings("--header", arguments.items[11]);
+    try expectEqualStrings("one,two,three", arguments.items[12]);
+    try expectEqualStrings("this_is#not_a_comment", arguments.items[13]);
+    try expectEqualStrings("#also_not_a_comment", arguments.items[14]);
+    try expectEqualStrings("--include", arguments.items[15]);
+    try expectEqualStrings("eins,zwei,drei", arguments.items[16]);
 }

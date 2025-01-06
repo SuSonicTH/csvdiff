@@ -69,9 +69,3 @@ pub fn getAproximateLineCount(self: *Self, samples: usize) !usize {
     const average = len / count;
     return self.data.len / average;
 }
-
-test "average" {
-    var file = try init("../csvcut/VTAS_SINGLE_DB.csv");
-    defer file.deinit();
-    //try std.testing.expectEqual(14976460, try file.getAproximateLineCount(100));
-}
