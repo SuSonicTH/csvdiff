@@ -21,7 +21,7 @@ pub const Options = struct {
     keyFields: ?SelectionList = null,
     excludedFields: ?SelectionList = null,
     keyIndices: ?[]usize = null,
-    excludedIndices: ?std.AutoHashMap(usize, bool) = null,
+    valueIndices: ?[]usize = null,
     trim: bool = false,
     listHeader: bool = false,
     inputFiles: std.ArrayList([]const u8),
@@ -40,14 +40,14 @@ pub const Options = struct {
         if (self.keyFields) |keyFields| {
             keyFields.deinit();
         }
+        if (self.excludedFields) |excludedFields| {
+            excludedFields.deinit();
+        }
         if (self.keyIndices) |keyIndices| {
             self.allocator.free(keyIndices);
         }
-        if (self.excludedFields) |selectedFields| {
-            selectedFields.deinit();
-        }
-        if (self.excludedIndices != null) {
-            self.excludedIndices.?.deinit();
+        if (self.valueIndices) |valueIndices| {
+            self.allocator.free(valueIndices);
         }
         if (self.header) |header| {
             self.allocator.free(header);
@@ -91,14 +91,36 @@ pub const Options = struct {
     }
 
     pub fn calculateFieldIndices(self: *Options) !void {
+        var excludedIndices = std.AutoHashMap(usize, bool).init(self.allocator);
+        defer excludedIndices.deinit();
+
         if (self.keyFields != null) {
-            self.keyIndices = try self.includedFields.?.calculateIndices(self.header);
-        }
-        if (self.excludedFields != null) {
-            self.excludedIndices = std.AutoHashMap(usize, bool).init(self.allocator);
-            for (try self.excludedFields.?.calculateIndices(self.header)) |index| {
-                try self.excludedIndices.?.put(index, true);
+            self.keyIndices = try self.keyFields.?.calculateIndices(self.header);
+            for (self.keyIndices.?) |index| {
+                try excludedIndices.put(index, true);
             }
+        }
+
+        if (self.excludedFields != null) {
+            for (try self.excludedFields.?.calculateIndices(self.header)) |index| {
+                try excludedIndices.put(index, true);
+            }
+        }
+
+        var count: usize = 0;
+        for (0..self.header.?.len) |index| {
+            if (!excludedIndices.contains(index)) {
+                count += 1;
+            }
+        }
+
+        self.valueIndices = try self.allocator.alloc(usize, count);
+        count = 0;
+        for (0..self.header.?.len) |index| {
+            if (!excludedIndices.contains(index)) {
+                self.valueIndices.?[count] = index;
+                count += 1;
+            } else {}
         }
     }
 
