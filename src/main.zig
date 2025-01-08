@@ -6,7 +6,7 @@ const Utf8Output = @import("Utf8Output.zig");
 const config = @import("config.zig");
 const FileReader = @import("FileReader.zig");
 const LineSet = @import("LineSet.zig");
-const FieldSet = @import("LineSet.zig");
+const FieldSet = @import("FieldSet.zig");
 const CsvLine = @import("CsvLine").CsvLine;
 
 pub fn main() !void {
@@ -108,7 +108,10 @@ fn lineDiff(allocator: std.mem.Allocator) !void {
 }
 
 fn uniqueDiff(allocator: std.mem.Allocator) !void {
+    const writer = std.io.getStdOut().writer();
+
     var csvLine = try CsvLine.init(allocator, .{ .trim = options.trim }); //todo: use options from arguments
+    defer csvLine.free();
 
     var fileA = try FileReader.init(options.inputFiles.items[0]);
     defer fileA.deinit();
@@ -120,11 +123,12 @@ fn uniqueDiff(allocator: std.mem.Allocator) !void {
     }
     try options.calculateFieldIndices();
 
-    _ = try std.io.getStdOut().writer().print("key:{any}\n", .{options.keyIndices});
-    _ = try std.io.getStdOut().writer().print("value:{any}\n", .{options.valueIndices});
-
-    var set = try FieldSet.init(try fileA.getAproximateLineCount(100), allocator);
+    var set = try FieldSet.init(try fileA.getAproximateLineCount(100), options.keyIndices.?, options.valueIndices.?, csvLine, allocator);
     defer set.deinit();
+
+    if (options.fileHeader) {
+        _ = try fileA.getLine(); //skip header;
+    }
 
     while (try fileA.getLine()) |line| {
         try set.put(line);
@@ -133,22 +137,29 @@ fn uniqueDiff(allocator: std.mem.Allocator) !void {
     var fileB = try FileReader.init(options.inputFiles.items[1]);
     defer fileB.deinit();
 
-    const writer = std.io.getStdOut().writer();
+    if (options.fileHeader) {
+        _ = try fileB.getLine(); //skip header;
+    }
+
     while (try fileB.getLine()) |line| {
-        if (set.get(line)) |entry| {
+        if (try set.get(line)) |entry| {
             if (entry.count > 0) {
+                if (!try set.valueMatches(entry, line)) {
+                    _ = try writer.print("- {s}\n", .{entry.line.?});
+                    _ = try writer.print("+ {s}\n", .{line});
+                }
                 entry.count -= 1;
             } else {
-                _ = try writer.print("> {s}\n", .{line});
+                _ = try writer.print("+ {s}\n", .{line});
             }
         } else {
-            _ = try writer.print("> {s}\n", .{line});
+            _ = try writer.print("+ {s}\n", .{line});
         }
     }
     for (set.data) |entry| {
         if (entry.line != null and entry.count > 0) {
             for (0..entry.count) |_| {
-                _ = try writer.print("< {s}\n", .{entry.line.?});
+                _ = try writer.print("- {s}\n", .{entry.line.?});
             }
         }
     }
