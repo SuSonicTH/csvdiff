@@ -67,5 +67,5 @@ pub fn getAproximateLineCount(self: *Self, samples: usize) !usize {
     }
     self.reset();
     const average = len / count;
-    return self.data.len / average;
+    return (self.data.len / average);
 }

@@ -12,6 +12,7 @@ pub const SetEntry = struct {
 const FieldType = enum(u3) {
     KEY,
     KEY2,
+    KEY3,
     VALUE,
     VALUE2,
 };
@@ -24,7 +25,7 @@ data: []SetEntry,
 mask: u32,
 count: u32 = 0,
 size: u5,
-fieldValue: [4]std.ArrayList(u8) = undefined,
+fieldValue: [5]std.ArrayList(u8) = undefined,
 
 pub fn init(initialSize: usize, keyIndices: []usize, valueIndices: []usize, csvLine: CsvLine, allocator: std.mem.Allocator) !Self {
     const size = getNumberOfBits(initialSize);
@@ -110,19 +111,20 @@ fn putHash(self: *Self, line: []const u8, hash: u32, key: []const u8, count: u32
         self.count += 1;
     } else if (try self.keyMatches(entry, hash, key)) {
         if (!try self.valueMatches(entry, line)) {
-            return error.duplicateKeyDifferentValues;
+            _ = try std.io.getStdOut().writer().print("{s}\n{s}\n", .{ line, entry.line.? });
+            return error.duplicateKeyDifferentValues1;
         }
         entry.count += 1;
         return;
     } else {
         if (try self.linearProbe(index + 1, self.data.len, hash, key)) |nextEntry| {
             if (nextEntry.line != null and !try self.valueMatches(nextEntry, line)) {
-                return error.duplicateKeyDifferentValues;
+                return error.duplicateKeyDifferentValues2;
             }
             updateEntry(nextEntry, hash, line, count);
         } else if (try self.linearProbe(0, index, hash, key)) |nextEntry| {
             if (nextEntry.line != null and !try self.valueMatches(nextEntry, line)) {
-                return error.duplicateKeyDifferentValues;
+                return error.duplicateKeyDifferentValues3;
             }
             updateEntry(nextEntry, hash, line, count);
         } else {
@@ -172,7 +174,7 @@ fn resize(self: *Self) !void {
 
     for (old) |entry| {
         if (entry.line != null) {
-            const storedKey = try self.getSelectedFields(.KEY2, entry.line.?);
+            const storedKey = try self.getSelectedFields(.KEY3, entry.line.?);
             try self.putHash(entry.line.?, entry.hash, storedKey, entry.count);
         }
     }
@@ -181,7 +183,7 @@ fn resize(self: *Self) !void {
 }
 
 pub inline fn getSelectedFields(self: *Self, comptime fieldType: FieldType, line: []const u8) ![]const u8 {
-    const indices: []usize = if (fieldType == .KEY or fieldType == .KEY2) self.keyIndices else self.valueIndices;
+    const indices: []usize = if (fieldType == .VALUE or fieldType == .VALUE2) self.valueIndices else self.keyIndices;
 
     var list: *std.ArrayList(u8) = &self.fieldValue[@intFromEnum(fieldType)];
     list.clearRetainingCapacity();

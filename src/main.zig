@@ -123,7 +123,7 @@ fn uniqueDiff(allocator: std.mem.Allocator) !void {
     }
     try options.calculateFieldIndices();
 
-    var set = try FieldSet.init(try fileA.getAproximateLineCount(100), options.keyIndices.?, options.valueIndices.?, csvLine, allocator);
+    var set = try FieldSet.init(try fileA.getAproximateLineCount(10000), options.keyIndices.?, options.valueIndices.?, csvLine, allocator);
     defer set.deinit();
 
     if (options.fileHeader) {
