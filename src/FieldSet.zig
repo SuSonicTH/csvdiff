@@ -17,6 +17,8 @@ const FieldType = enum(u3) {
     VALUE2,
 };
 
+const LoadFactor = 0.7;
+
 allocator: std.mem.Allocator,
 csvLine: CsvLine,
 keyIndices: []usize,
@@ -58,6 +60,9 @@ fn getNumberOfBits(size: usize) u5 {
         reminder = reminder >> 1;
         bits += 1;
     }
+    if (@as(f32, @floatFromInt(size)) / @as(f32, @floatFromInt(@as(u32, 1) << bits)) > LoadFactor) {
+        bits += 1;
+    }
     return bits;
 }
 
@@ -72,7 +77,7 @@ pub fn put(self: *Self, line: []const u8) !void {
     const key = try self.getSelectedFields(.KEY, line);
     const hash = std.hash.XxHash32.hash(0, key);
     try self.putHash(line, hash, key, 1);
-    if (self.load() > 0.7) {
+    if (self.load() > LoadFactor) {
         try self.resize();
     }
 }
