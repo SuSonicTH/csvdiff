@@ -106,7 +106,6 @@ fn putHash(self: *Self, line: []const u8, hash: u32, key: []const u8, count: u32
     var entry: *SetEntry = &self.data[index];
 
     if (entry.line == null) {
-        //_ = try std.io.getStdOut().writer().print("OK:{s}\n", .{line});
         updateEntry(entry, hash, line, count);
         self.count += 1;
     } else if (try self.keyMatches(entry, hash, key)) {
@@ -117,13 +116,11 @@ fn putHash(self: *Self, line: []const u8, hash: u32, key: []const u8, count: u32
         return;
     } else {
         if (try self.linearProbe(index + 1, self.data.len, hash, key)) |nextEntry| {
-            //_ = try std.io.getStdOut().writer().print("COL1:{s}\n", .{line});
             if (nextEntry.line != null and !try self.valueMatches(nextEntry, line)) {
                 return error.duplicateKeyDifferentValues;
             }
             updateEntry(nextEntry, hash, line, count);
         } else if (try self.linearProbe(0, index, hash, key)) |nextEntry| {
-            //_ = try std.io.getStdOut().writer().print("COL2:{s}\n", .{line});
             if (nextEntry.line != null and !try self.valueMatches(nextEntry, line)) {
                 return error.duplicateKeyDifferentValues;
             }
