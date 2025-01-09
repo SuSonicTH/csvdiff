@@ -9,10 +9,12 @@ pub const SetEntry = struct {
     count: u64,
 };
 
-const KEY: u3 = 0;
-const KEY2: u3 = 1;
-const VALUE: u3 = 2;
-const VALUE2: u3 = 3;
+const FieldType = enum(u3) {
+    KEY,
+    KEY2,
+    VALUE,
+    VALUE2,
+};
 
 allocator: std.mem.Allocator,
 csvLine: CsvLine,
@@ -36,8 +38,8 @@ pub fn init(initialSize: usize, keyIndices: []usize, valueIndices: []usize, csvL
         .size = size,
     };
 
-    inline for (KEY..VALUE2 + 1) |index| {
-        set.fieldValue[index] = std.ArrayList(u8).init(allocator);
+    inline for (0..@intFromEnum(FieldType.VALUE2) + 1) |index| {
+        set.fieldValue[index] = try std.ArrayList(u8).initCapacity(allocator, 1024);
     }
 
     @memset(set.data, .{
@@ -60,10 +62,13 @@ fn getNumberOfBits(size: usize) u6 {
 
 pub fn deinit(self: *Self) void {
     self.allocator.free(self.data);
+    inline for (0..@intFromEnum(FieldType.VALUE2) + 1) |index| {
+        self.fieldValue[index].deinit();
+    }
 }
 
 pub fn put(self: *Self, line: []const u8) !void {
-    const key = try self.getSelectedFields(KEY, line);
+    const key = try self.getSelectedFields(.KEY, line);
     const hash = std.hash.XxHash64.hash(0, key);
     try self.putHash(line, hash, key, 1);
     if (self.load() > 0.7) {
@@ -72,7 +77,7 @@ pub fn put(self: *Self, line: []const u8) !void {
 }
 
 pub fn get(self: *Self, line: []const u8) !?*SetEntry {
-    const key = try self.getSelectedFields(KEY, line);
+    const key = try self.getSelectedFields(.KEY, line);
     const hash = std.hash.XxHash64.hash(0, key);
     const index = hash & self.mask;
     const entry = &self.data[index];
@@ -101,6 +106,7 @@ fn putHash(self: *Self, line: []const u8, hash: u64, key: []const u8, count: u64
     var entry: *SetEntry = &self.data[index];
 
     if (entry.line == null) {
+        //_ = try std.io.getStdOut().writer().print("OK:{s}\n", .{line});
         updateEntry(entry, hash, line, count);
         self.count += 1;
     } else if (try self.keyMatches(entry, hash, key)) {
@@ -111,11 +117,13 @@ fn putHash(self: *Self, line: []const u8, hash: u64, key: []const u8, count: u64
         return;
     } else {
         if (try self.linearProbe(index + 1, self.data.len, hash, key)) |nextEntry| {
+            //_ = try std.io.getStdOut().writer().print("COL1:{s}\n", .{line});
             if (nextEntry.line != null and !try self.valueMatches(nextEntry, line)) {
                 return error.duplicateKeyDifferentValues;
             }
             updateEntry(nextEntry, hash, line, count);
         } else if (try self.linearProbe(0, index, hash, key)) |nextEntry| {
+            //_ = try std.io.getStdOut().writer().print("COL2:{s}\n", .{line});
             if (nextEntry.line != null and !try self.valueMatches(nextEntry, line)) {
                 return error.duplicateKeyDifferentValues;
             }
@@ -127,7 +135,7 @@ fn putHash(self: *Self, line: []const u8, hash: u64, key: []const u8, count: u64
     }
 }
 
-fn linearProbe(self: *Self, start: u64, end: u64, hash: u64, key: []const u8) !?*SetEntry {
+inline fn linearProbe(self: *Self, start: u64, end: u64, hash: u64, key: []const u8) !?*SetEntry {
     var index: u64 = start;
     while (index < end) {
         const entry = &self.data[index];
@@ -141,7 +149,7 @@ fn linearProbe(self: *Self, start: u64, end: u64, hash: u64, key: []const u8) !?
     return null;
 }
 
-pub fn load(self: *Self) f32 {
+pub inline fn load(self: *Self) f32 {
     if (self.count == 0) {
         return 0.0;
     }
@@ -167,7 +175,7 @@ fn resize(self: *Self) !void {
 
     for (old) |entry| {
         if (entry.line != null) {
-            const storedKey = try self.getSelectedFields(KEY2, entry.line.?);
+            const storedKey = try self.getSelectedFields(.KEY2, entry.line.?);
             try self.putHash(entry.line.?, entry.hash, storedKey, entry.count);
         }
     }
@@ -175,27 +183,25 @@ fn resize(self: *Self) !void {
     self.allocator.free(old);
 }
 
-pub fn getSelectedFields(self: *Self, comptime what: u3, line: []const u8) ![]const u8 {
-    var list: *std.ArrayList(u8) = &self.fieldValue[what];
+pub inline fn getSelectedFields(self: *Self, comptime fieldType: FieldType, line: []const u8) ![]const u8 {
+    const indices: []usize = if (fieldType == .KEY or fieldType == .KEY2) self.keyIndices else self.valueIndices;
+
+    var list: *std.ArrayList(u8) = &self.fieldValue[@intFromEnum(fieldType)];
     list.clearRetainingCapacity();
+
     const fields = try self.csvLine.parse(line);
-    if (what < VALUE) {
-        for (self.keyIndices) |index| {
-            try list.appendSlice(fields[index]);
-            try list.append('|');
-        }
-    } else {
-        for (self.valueIndices) |index| {
-            try list.appendSlice(fields[index]);
-            try list.append('|');
-        }
+
+    try list.appendSlice(fields[indices[0]]);
+    for (1..indices.len) |index| {
+        try list.append('|');
+        try list.appendSlice(fields[indices[index]]);
     }
     return list.items;
 }
 
-fn keyMatches(self: *Self, entry: *SetEntry, hash: u64, key: []const u8) !bool {
+inline fn keyMatches(self: *Self, entry: *SetEntry, hash: u64, key: []const u8) !bool {
     if (entry.hash == hash) {
-        const storedKey = try self.getSelectedFields(KEY2, entry.line.?);
+        const storedKey = try self.getSelectedFields(.KEY2, entry.line.?);
         if (std.mem.eql(u8, key, storedKey)) { //todo also chek values for equal -> error if not
             return true;
         }
@@ -204,8 +210,8 @@ fn keyMatches(self: *Self, entry: *SetEntry, hash: u64, key: []const u8) !bool {
 }
 
 pub fn valueMatches(self: *Self, entry: *SetEntry, line: []const u8) !bool {
-    const value = try self.getSelectedFields(VALUE, line);
-    const entryValue = try self.getSelectedFields(VALUE2, entry.line.?);
+    const value = try self.getSelectedFields(.VALUE, line);
+    const entryValue = try self.getSelectedFields(.VALUE2, entry.line.?);
     return std.mem.eql(u8, value, entryValue);
 }
 
