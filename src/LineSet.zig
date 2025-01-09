@@ -4,22 +4,22 @@ const Self = @This();
 
 pub const SetEntry = struct {
     line: ?[]const u8,
-    hash: u64,
-    count: u64,
+    hash: u32,
+    count: u32,
 };
 
 allocator: std.mem.Allocator,
 data: []SetEntry,
-mask: u64,
-count: u64 = 0,
-size: u6,
+mask: u32,
+count: u32 = 0,
+size: u5,
 
 pub fn init(initialSize: usize, allocator: std.mem.Allocator) !Self {
     const size = getNumberOfBits(initialSize);
     const set: Self = .{
         .allocator = allocator,
-        .data = try allocator.alloc(SetEntry, @as(u64, 1) << size),
-        .mask = (@as(u64, 1) << size) - 1,
+        .data = try allocator.alloc(SetEntry, @as(u32, 1) << size),
+        .mask = (@as(u32, 1) << size) - 1,
         .size = size,
     };
     @memset(set.data, .{
@@ -30,9 +30,9 @@ pub fn init(initialSize: usize, allocator: std.mem.Allocator) !Self {
     return set;
 }
 
-fn getNumberOfBits(size: usize) u6 {
+fn getNumberOfBits(size: usize) u5 {
     var reminder = size;
-    var bits: u6 = 0;
+    var bits: u5 = 0;
     while (reminder > 0) {
         reminder = reminder >> 1;
         bits += 1;
@@ -45,14 +45,14 @@ pub fn deinit(self: *Self) void {
 }
 
 pub fn put(self: *Self, line: []const u8) !void {
-    const hash = std.hash.XxHash64.hash(0, line);
+    const hash = std.hash.XxHash32.hash(0, line);
     try self.putHash(line, hash, 1);
     if (self.load() > 0.7) {
         try self.resize();
     }
 }
 
-inline fn putHash(self: *Self, line: []const u8, hash: u64, count: u64) !void {
+inline fn putHash(self: *Self, line: []const u8, hash: u32, count: u32) !void {
     const index = hash & self.mask;
     var entry: *SetEntry = &self.data[index];
 
@@ -80,11 +80,11 @@ fn resize(self: *Self) !void {
     }
 
     self.size += 1;
-    self.mask = (@as(u64, 1) << self.size) - 1;
+    self.mask = (@as(u32, 1) << self.size) - 1;
     self.count = 0;
 
     const old = self.data;
-    self.data = try self.allocator.alloc(SetEntry, @as(u64, 1) << self.size);
+    self.data = try self.allocator.alloc(SetEntry, @as(u32, 1) << self.size);
     @memset(self.data, .{
         .line = null,
         .hash = 0,
@@ -100,14 +100,14 @@ fn resize(self: *Self) !void {
     self.allocator.free(old);
 }
 
-fn isSame(entry: *SetEntry, hash: u64, line: []const u8) bool {
+fn isSame(entry: *SetEntry, hash: u32, line: []const u8) bool {
     if (entry.hash == hash and entry.line.?.len == line.len and std.mem.eql(u8, entry.line.?, line)) {
         return true;
     }
     return false;
 }
 
-fn updateEntry(entry: *SetEntry, hash: u64, line: []const u8, count: u64) void {
+fn updateEntry(entry: *SetEntry, hash: u32, line: []const u8, count: u32) void {
     if (entry.line == null) {
         entry.line = line;
         entry.count = count;
@@ -117,8 +117,8 @@ fn updateEntry(entry: *SetEntry, hash: u64, line: []const u8, count: u64) void {
     }
 }
 
-inline fn linearProbe(self: *Self, start: u64, end: u64, hash: u64, line: []const u8) ?*SetEntry {
-    var index: u64 = start;
+inline fn linearProbe(self: *Self, start: usize, end: usize, hash: u32, line: []const u8) ?*SetEntry {
+    var index: usize = start;
     while (index < end) {
         const entry = &self.data[index];
         if (entry.line == null) {
@@ -132,7 +132,7 @@ inline fn linearProbe(self: *Self, start: u64, end: u64, hash: u64, line: []cons
 }
 
 pub fn get(self: *Self, line: []const u8) ?*SetEntry {
-    const hash = std.hash.XxHash64.hash(0, line);
+    const hash = std.hash.XxHash32.hash(0, line);
     const index = hash & self.mask;
     const entry = &self.data[index];
     if (entry.line == null) {
