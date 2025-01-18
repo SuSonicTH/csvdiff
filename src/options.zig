@@ -43,9 +43,6 @@ pub const Options = struct {
         if (self.excludedFields) |excludedFields| {
             excludedFields.deinit();
         }
-        if (self.keyIndices) |keyIndices| {
-            self.allocator.free(keyIndices);
-        }
         if (self.valueIndices) |valueIndices| {
             self.allocator.free(valueIndices);
         }
@@ -120,7 +117,7 @@ pub const Options = struct {
             if (!excludedIndices.contains(index)) {
                 self.valueIndices.?[count] = index;
                 count += 1;
-            } else {}
+            }
         }
     }
 

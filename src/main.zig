@@ -35,8 +35,10 @@ fn _main() !void {
 
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
+    const arguments = try castArgs(args, allocator);
+    defer allocator.free(arguments);
 
-    try ArgumentParser.parse(&options, args, allocator);
+    try ArgumentParser.parse(&options, arguments, allocator);
     try ArgumentParser.validateArguments(&options);
 
     if (options.listHeader) {
@@ -56,6 +58,14 @@ fn _main() !void {
             _ = try stderr.print("time needed: {d:0.2}ms\n", .{timeNeeded});
         }
     }
+}
+
+fn castArgs(args: [][:0]u8, allocator: std.mem.Allocator) ![][]const u8 {
+    var ret = try allocator.alloc([]const u8, args.len);
+    for (args, 0..) |arg, i| {
+        ret[i] = arg[0..];
+    }
+    return ret;
 }
 
 fn listHeader(allocator: std.mem.Allocator) !void {
