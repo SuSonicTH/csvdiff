@@ -75,7 +75,7 @@ pub fn deinit(self: *Self) void {
 
 pub fn put(self: *Self, line: []const u8) !void {
     const key = try self.getSelectedFields(.KEY, line);
-    const hash = std.hash.XxHash32.hash(0, key);
+    const hash:u32 = @truncate(std.hash.RapidHash.hash(0, key));
     try self.putHash(line, hash, key, 1);
     if (self.load() > LoadFactor) {
         try self.resize();
@@ -84,7 +84,7 @@ pub fn put(self: *Self, line: []const u8) !void {
 
 pub fn get(self: *Self, line: []const u8) !?*SetEntry {
     const key = try self.getSelectedFields(.KEY, line);
-    const hash = std.hash.XxHash32.hash(0, key);
+    const hash:u32 = @truncate(std.hash.RapidHash.hash(0, key));
     const index = hash & self.mask;
     const entry = &self.data[index];
     if (entry.line == null) {

@@ -45,7 +45,7 @@ pub fn deinit(self: *Self) void {
 }
 
 pub fn put(self: *Self, line: []const u8) !void {
-    const hash = std.hash.XxHash32.hash(0, line);
+    const hash:u32 = @truncate(std.hash.RapidHash.hash(0, line));
     try self.putHash(line, hash, 1);
     if (self.load() > 0.7) {
         try self.resize();
@@ -132,7 +132,7 @@ inline fn linearProbe(self: *Self, start: usize, end: usize, hash: u32, line: []
 }
 
 pub fn get(self: *Self, line: []const u8) ?*SetEntry {
-    const hash = std.hash.XxHash32.hash(0, line);
+    const hash:u32 = @truncate(std.hash.RapidHash.hash(0, line));
     const index = hash & self.mask;
     const entry = &self.data[index];
     if (entry.line == null) {
