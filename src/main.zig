@@ -8,6 +8,7 @@ const FileReader = @import("FileReader.zig");
 const LineSet = @import("LineSet.zig");
 const FieldSet = @import("FieldSet.zig");
 const CsvLine = @import("CsvLine").CsvLine;
+const builtin = @import("builtin");
 
 pub fn main() !void {
     _main() catch |err| switch (err) {
@@ -17,14 +18,22 @@ pub fn main() !void {
 }
 
 var options: Options = undefined;
+var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
 
 fn _main() !void {
     var timer = try std.time.Timer.start();
     Utf8Output.init();
     defer Utf8Output.deinit();
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = gpa.allocator();
+    const allocator, const is_debug = gpa: {
+        break :gpa switch (builtin.mode) {
+            .Debug, .ReleaseSafe => .{ debug_allocator.allocator(), true },
+            .ReleaseFast, .ReleaseSmall => .{ std.heap.smp_allocator, false },
+        };
+    };
+    defer if (is_debug) {
+        _ = debug_allocator.deinit();
+    };
 
     options = try Options.init(allocator);
     defer options.deinit();
