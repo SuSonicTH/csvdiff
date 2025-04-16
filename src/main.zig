@@ -110,16 +110,16 @@ fn lineDiff(allocator: std.mem.Allocator) !void {
             if (entry.count > 0) {
                 entry.count -= 1;
             } else {
-                _ = try writer.print("> {s}\n", .{line});
+                _ = try writer.print("+ {s}\n", .{line});
             }
         } else {
-            _ = try writer.print("> {s}\n", .{line});
+            _ = try writer.print("+ {s}\n", .{line});
         }
     }
     for (set.data) |entry| {
         if (entry.line != null and entry.count > 0) {
             for (0..entry.count) |_| {
-                _ = try writer.print("< {s}\n", .{entry.line.?});
+                _ = try writer.print("- {s}\n", .{entry.line.?});
             }
         }
     }
