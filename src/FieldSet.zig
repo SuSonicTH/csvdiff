@@ -73,7 +73,7 @@ pub fn deinit(self: *Self) void {
     }
 }
 
-pub fn put(self: *Self, line: []const u8) !void {
+pub inline fn put(self: *Self, line: []const u8) !void {
     const key = try self.getSelectedFields(.KEY, line);
     const hash:u32 = @truncate(std.hash.RapidHash.hash(0, key));
     try self.putHash(line, hash, key, 1);
