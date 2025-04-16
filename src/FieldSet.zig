@@ -213,7 +213,7 @@ inline fn keyMatches(self: *Self, entry: *SetEntry, hash: u32, key: []const u8) 
     return false;
 }
 
-pub fn valueMatches(self: *Self, entry: *SetEntry, line: []const u8) !bool {
+pub inline fn valueMatches(self: *Self, entry: *SetEntry, line: []const u8) !bool {
     const value = try self.getSelectedFields(.VALUE, line);
     const entryValue = try self.getSelectedFields(.VALUE2, entry.line.?);
     return std.mem.eql(u8, value, entryValue);
