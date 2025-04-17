@@ -120,14 +120,6 @@ pub const Options = struct {
             }
         }
     }
-
-    pub fn setInputLimit(self: *Options, value: []const u8) !void {
-        self.inputLimit = try std.fmt.parseInt(usize, value, 10);
-    }
-
-    pub fn setOutputLimit(self: *Options, value: []const u8) !void {
-        self.outputLimit = try std.fmt.parseInt(usize, value, 10);
-    }
 };
 
 const SelectionList = struct {

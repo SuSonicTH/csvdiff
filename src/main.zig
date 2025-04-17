@@ -11,20 +11,10 @@ const CsvLine = @import("CsvLine").CsvLine;
 const builtin = @import("builtin");
 
 pub fn main() !void {
-    _main() catch |err| switch (err) {
-        error.OutOfMemory => ExitCode.outOfMemory.printErrorAndExit(.{}),
-        else => ExitCode.genericError.printErrorAndExit(.{err}),
-    };
-}
-
-var options: Options = undefined;
-var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
-
-fn _main() !void {
-    var timer = try std.time.Timer.start();
     Utf8Output.init();
     defer Utf8Output.deinit();
 
+    var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
     const allocator, const is_debug = gpa: {
         break :gpa switch (builtin.mode) {
             .Debug, .ReleaseSafe => .{ debug_allocator.allocator(), true },
@@ -35,27 +25,24 @@ fn _main() !void {
         _ = debug_allocator.deinit();
     };
 
-    options = try Options.init(allocator);
+    _main(allocator) catch |err| switch (err) {
+        error.OutOfMemory => ExitCode.outOfMemory.printErrorAndExit(.{}),
+        else => ExitCode.genericError.printErrorAndExit(.{err}),
+    };
+}
+
+fn _main(allocator: std.mem.Allocator) !void {
+    var timer = try std.time.Timer.start();
+
+    var options = try parseArgumentsToOptions(allocator);
     defer options.deinit();
 
-    if (config.readConfigFromFile("default.config", allocator) catch null) |defaultArguments| {
-        try ArgumentParser.parse(&options, defaultArguments.items, allocator);
-    }
-
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
-    const arguments = try castArgs(args, allocator);
-    defer allocator.free(arguments);
-
-    try ArgumentParser.parse(&options, arguments, allocator);
-    try ArgumentParser.validateArguments(&options);
-
     if (options.listHeader) {
-        try listHeader(allocator);
+        try listHeader(options, allocator);
     } else if (options.keyFields == null) {
-        try lineDiff(allocator);
+        try lineDiff(options, allocator);
     } else {
-        try uniqueDiff(allocator);
+        try uniqueDiff(&options, allocator);
     }
 
     if (options.time) {
@@ -69,6 +56,23 @@ fn _main() !void {
     }
 }
 
+fn parseArgumentsToOptions(allocator: std.mem.Allocator) !Options {
+    var options = try Options.init(allocator);
+
+    if (config.readConfigFromFile("default.config", allocator) catch null) |defaultArguments| {
+        try ArgumentParser.parse(&options, defaultArguments.items, allocator);
+    }
+
+    const args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
+    const arguments = try castArgs(args, allocator);
+    defer allocator.free(arguments);
+
+    try ArgumentParser.parse(&options, arguments, allocator);
+    try ArgumentParser.validateArguments(&options);
+    return options;
+}
+
 fn castArgs(args: [][:0]u8, allocator: std.mem.Allocator) ![][]const u8 {
     var ret = try allocator.alloc([]const u8, args.len);
     for (args, 0..) |arg, i| {
@@ -77,36 +81,36 @@ fn castArgs(args: [][:0]u8, allocator: std.mem.Allocator) ![][]const u8 {
     return ret;
 }
 
-fn listHeader(allocator: std.mem.Allocator) !void {
-    var csvLine = try CsvLine.init(allocator, .{ .trim = options.trim }); //todo: use options from arguments
+fn listHeader(options: Options, allocator: std.mem.Allocator) !void {
+    var csvLine = try CsvLine.init(allocator, .{ .separator = options.inputSeparator[0], .trim = options.trim, .quoute = if (options.inputQuoute) |quote| quote[0] else null });
     var file = try FileReader.init(options.inputFiles.items[0]);
     defer file.deinit();
 
     const writer = std.io.getStdOut().writer();
     if (try file.getLine()) |line| {
         const fields = try csvLine.parse(line);
-        for (fields) |field| {
-            _ = try writer.print("{s}\n", .{field});
+        for (fields, 1..) |field, i| {
+            _ = try writer.print("{d}: {s}\n", .{ i, field });
         }
     }
 }
 
-fn lineDiff(allocator: std.mem.Allocator) !void {
+fn lineDiff(options: Options, allocator: std.mem.Allocator) !void {
     var fileA = try FileReader.init(options.inputFiles.items[0]);
     defer fileA.deinit();
-    var set = try LineSet.init(try fileA.getAproximateLineCount(100), allocator);
-    defer set.deinit();
-
-    while (try fileA.getLine()) |line| {
-        try set.put(line);
-    }
 
     var fileB = try FileReader.init(options.inputFiles.items[1]);
     defer fileB.deinit();
 
+    var lineSet = try LineSet.init(try fileA.getAproximateLineCount(100), allocator);
+    defer lineSet.deinit();
+    while (try fileA.getLine()) |line| {
+        try lineSet.put(line);
+    }
+
     const writer = std.io.getStdOut().writer();
     while (try fileB.getLine()) |line| {
-        if (set.get(line)) |entry| {
+        if (lineSet.get(line)) |entry| {
             if (entry.count > 0) {
                 entry.count -= 1;
             } else {
@@ -116,24 +120,26 @@ fn lineDiff(allocator: std.mem.Allocator) !void {
             _ = try writer.print("+ {s}\n", .{line});
         }
     }
-    for (set.data) |entry| {
+    for (lineSet.data) |entry| {
         if (entry.line != null and entry.count > 0) {
             for (0..entry.count) |_| {
                 _ = try writer.print("- {s}\n", .{entry.line.?});
             }
         }
     }
-    _ = try writer.print("setStat: {d},{d},{d}\n", .{ set.count, set.data.len, set.load() });
 }
 
-fn uniqueDiff(allocator: std.mem.Allocator) !void {
+fn uniqueDiff(options: *Options, allocator: std.mem.Allocator) !void {
     const writer = std.io.getStdOut().writer();
-
-    var csvLine = try CsvLine.init(allocator, .{ .trim = options.trim }); //todo: use options from arguments
-    defer csvLine.free();
 
     var fileA = try FileReader.init(options.inputFiles.items[0]);
     defer fileA.deinit();
+
+    var fileB = try FileReader.init(options.inputFiles.items[1]);
+    defer fileB.deinit();
+
+    var csvLine = try CsvLine.init(allocator, .{ .separator = options.inputSeparator[0], .trim = options.trim, .quoute = if (options.inputQuoute) |quote| quote[0] else null });
+    defer csvLine.free();
 
     if (options.fileHeader) {
         if (try fileA.getLine()) |line| {
@@ -142,30 +148,27 @@ fn uniqueDiff(allocator: std.mem.Allocator) !void {
     }
     try options.calculateFieldIndices();
 
-    var set = try FieldSet.init(try fileA.getAproximateLineCount(10000), options.keyIndices.?, options.valueIndices.?, csvLine, allocator);
-    defer set.deinit();
+    var fieldSet = try FieldSet.init(try fileA.getAproximateLineCount(10000), options.keyIndices.?, options.valueIndices.?, csvLine, allocator);
+    defer fieldSet.deinit();
 
     if (options.fileHeader) {
         _ = try fileA.getLine(); //skip header;
     }
 
     while (try fileA.getLine()) |line| {
-        try set.put(line);
+        try fieldSet.put(line);
     }
-
-    var fileB = try FileReader.init(options.inputFiles.items[1]);
-    defer fileB.deinit();
 
     if (options.fileHeader) {
         _ = try fileB.getLine(); //skip header;
     }
 
     while (try fileB.getLine()) |line| {
-        if (try set.get(line)) |entry| {
+        if (try fieldSet.get(line)) |entry| {
             if (entry.count > 0) {
-                if (!try set.valueMatches(entry, line)) {
-                    _ = try writer.print("- {s}\n", .{entry.line.?});
-                    _ = try writer.print("+ {s}\n", .{line});
+                if (!try fieldSet.valueMatches(entry, line)) {
+                    _ = try writer.print("< {s}\n", .{entry.line.?});
+                    _ = try writer.print("> {s}\n", .{line});
                 }
                 entry.count -= 1;
             } else {
@@ -175,14 +178,13 @@ fn uniqueDiff(allocator: std.mem.Allocator) !void {
             _ = try writer.print("+ {s}\n", .{line});
         }
     }
-    for (set.data) |entry| {
+    for (fieldSet.data) |entry| {
         if (entry.line != null and entry.count > 0) {
             for (0..entry.count) |_| {
                 _ = try writer.print("- {s}\n", .{entry.line.?});
             }
         }
     }
-    _ = try writer.print("setStat: {d},{d},{d}\n", .{ set.count, set.data.len, set.load() });
 }
 
 test {
