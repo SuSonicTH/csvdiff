@@ -1,5 +1,6 @@
 const std = @import("std");
 const CsvLine = @import("CsvLine").CsvLine;
+const StringJoiner = @import("StringJoiner.zig");
 
 const Self = @This();
 
@@ -27,7 +28,7 @@ data: []SetEntry,
 mask: u32,
 count: u32 = 0,
 size: u5,
-fieldValue: [5]std.ArrayList(u8) = undefined,
+fieldValue: [5]StringJoiner = undefined,
 
 pub fn init(initialSize: usize, keyIndices: []usize, valueIndices: []usize, csvLine: CsvLine, allocator: std.mem.Allocator) !Self {
     const size = getNumberOfBits(initialSize);
@@ -42,7 +43,7 @@ pub fn init(initialSize: usize, keyIndices: []usize, valueIndices: []usize, csvL
     };
 
     inline for (0..@intFromEnum(FieldType.VALUE2) + 1) |index| {
-        set.fieldValue[index] = try std.ArrayList(u8).initCapacity(allocator, 1024);
+        set.fieldValue[index] = try StringJoiner.init(allocator, '|', 1024);
     }
 
     @memset(set.data, .{
@@ -75,7 +76,7 @@ pub fn deinit(self: *Self) void {
 
 pub inline fn put(self: *Self, line: []const u8) !void {
     const key = try self.getSelectedFields(.KEY, line);
-    const hash:u32 = @truncate(std.hash.RapidHash.hash(0, key));
+    const hash: u32 = @truncate(std.hash.RapidHash.hash(0, key));
     try self.putHash(line, hash, key, 1);
     if (self.load() > LoadFactor) {
         try self.resize();
@@ -84,7 +85,7 @@ pub inline fn put(self: *Self, line: []const u8) !void {
 
 pub fn get(self: *Self, line: []const u8) !?*SetEntry {
     const key = try self.getSelectedFields(.KEY, line);
-    const hash:u32 = @truncate(std.hash.RapidHash.hash(0, key));
+    const hash: u32 = @truncate(std.hash.RapidHash.hash(0, key));
     const index = hash & self.mask;
     const entry = &self.data[index];
     if (entry.line == null) {
@@ -190,17 +191,16 @@ fn resize(self: *Self) !void {
 pub inline fn getSelectedFields(self: *Self, comptime fieldType: FieldType, line: []const u8) ![]const u8 {
     const indices: []usize = if (fieldType == .VALUE or fieldType == .VALUE2) self.valueIndices else self.keyIndices;
 
-    var list: *std.ArrayList(u8) = &self.fieldValue[@intFromEnum(fieldType)];
-    list.clearRetainingCapacity();
+    var joiner: *StringJoiner = &self.fieldValue[@intFromEnum(fieldType)];
+    joiner.clear();
 
     const fields = try self.csvLine.parse(line);
 
-    try list.appendSlice(fields[indices[0]]);
+    try joiner.add(fields[indices[0]]);
     for (1..indices.len) |index| {
-        try list.append('|');
-        try list.appendSlice(fields[indices[index]]);
+        try joiner.add(fields[indices[index]]);
     }
-    return list.items;
+    return joiner.get();
 }
 
 inline fn keyMatches(self: *Self, entry: *SetEntry, hash: u32, key: []const u8) !bool {
