@@ -33,7 +33,7 @@ pub fn get(self: *Self) []u8 {
     return self.buffer[0..self.len];
 }
 
-inline fn ensureLen(self: *Self, additionalLen: usize) !void {
+fn ensureLen(self: *Self, additionalLen: usize) !void {
     const minimalLen = self.len + additionalLen;
     if (self.buffer.len < minimalLen) {
         var newSize = self.buffer.len * 2;

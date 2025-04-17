@@ -146,7 +146,7 @@ pub const Parser = struct {
 
     fn printUsage() !void {
         const help = @embedFile("USAGE.txt");
-        try std.io.getStdOut().writeAll(version ++ help);
+        try std.io.getStdOut().writeAll(version ++ "\n" ++ help);
         try ExitCode.OK.exit();
     }
 
@@ -157,7 +157,7 @@ pub const Parser = struct {
     }
 
     pub fn validateArguments(options: *Options) !void {
-        if (options.inputFiles.items.len != 2) {
+        if (options.inputFiles.items.len != 2 and !(options.inputFiles.items.len == 1 and options.listHeader == true)) {
             ExitCode.needTwoInputFiles.printErrorAndExit(.{options.inputFiles.items.len});
         }
     }

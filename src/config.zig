@@ -171,7 +171,7 @@ fn getConfigFileFromHome(name: []const u8, allocator: std.mem.Allocator) !std.fs
     var envMap = try std.process.getEnvMap(allocator);
     defer envMap.deinit();
 
-    if (envMap.get("CSVCUT_CONFIG")) |config| {
+    if (envMap.get("CSVDIFF_CONFIG")) |config| {
         return openConfigFile(config, "", "", name, allocator);
     } else if (envMap.get("HOME")) |home| {
         return openConfigFile(home, ".config/csvdiff/", "", name, allocator);
