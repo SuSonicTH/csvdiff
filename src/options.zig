@@ -28,6 +28,8 @@ pub const Options = struct {
     outputName: ?[]const u8 = null,
     time: bool = false,
     color: bool = false,
+    asCsv: bool = false,
+    diffSpaceing: u8 = ' ',
 
     pub fn init(allocator: std.mem.Allocator) !Options {
         return .{
@@ -52,6 +54,12 @@ pub const Options = struct {
         }
         if (self.csvLine != null) {
             self.csvLine.?.deinit();
+        }
+    }
+
+    pub fn setDiffSpacing(self: *Options) void {
+        if (self.asCsv) {
+            self.diffSpaceing = self.inputSeparator[0];
         }
     }
 

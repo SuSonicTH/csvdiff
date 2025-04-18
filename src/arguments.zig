@@ -30,6 +30,7 @@ const Argument = enum {
     @"--output",
     @"--time",
     @"--color",
+    @"--asCsv",
 };
 
 const Separator = enum {
@@ -104,6 +105,9 @@ pub const Parser = struct {
                     .@"--color" => {
                         options.color = true;
                     },
+                    .@"--asCsv" => {
+                        options.asCsv = true;
+                    },
                 }
             } else {
                 try options.inputFiles.append(arg);
@@ -164,5 +168,6 @@ pub const Parser = struct {
         if (options.inputFiles.items.len != 2 and !(options.inputFiles.items.len == 1 and options.listHeader == true)) {
             ExitCode.needTwoInputFiles.printErrorAndExit(.{options.inputFiles.items.len});
         }
+        options.setDiffSpacing();
     }
 };

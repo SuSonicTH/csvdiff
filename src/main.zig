@@ -104,18 +104,26 @@ fn lineDiff(options: Options, allocator: std.mem.Allocator) !void {
     }
 
     const writer = std.io.getStdOut().writer();
+
+    if (options.asCsv and options.fileHeader) {
+        if (try fileB.getLine()) |header| {
+            _ = try writer.print("DIFF{c}{s}\n", .{ options.diffSpaceing, header });
+        }
+        fileA.reset();
+    }
+
     while (try fileB.getLine()) |line| {
         if (lineSet.get(line)) |entry| {
             if (entry.count > 0) {
                 entry.count -= 1;
             } else {
                 if (options.color) try writer.print("\x1B[32m", .{});
-                _ = try writer.print("+ {s}\n", .{line});
+                _ = try writer.print("+{c}{s}\n", .{ options.diffSpaceing, line });
                 if (options.color) try writer.print("\x1B[0m", .{});
             }
         } else {
             if (options.color) try writer.print("\x1B[32m", .{});
-            _ = try writer.print("+ {s}\n", .{line});
+            _ = try writer.print("+{c}{s}\n", .{ options.diffSpaceing, line });
             if (options.color) try writer.print("\x1B[30m", .{});
         }
     }
@@ -124,7 +132,7 @@ fn lineDiff(options: Options, allocator: std.mem.Allocator) !void {
         if (entry.line != null and entry.count > 0) {
             for (0..entry.count) |_| {
                 if (options.color) try writer.print("\x1B[31m", .{});
-                _ = try writer.print("- {s}\n", .{entry.line.?});
+                _ = try writer.print("-{c}{s}\n", .{ options.diffSpaceing, entry.line.? });
                 if (options.color) try writer.print("\x1B[30m", .{});
             }
         }
@@ -162,7 +170,10 @@ fn uniqueDiff(options: *Options, allocator: std.mem.Allocator) !void {
     }
 
     if (options.fileHeader) {
-        _ = try fileB.getLine(); //skip header;
+        const header = try fileB.getLine(); //skip header;
+        if (options.asCsv and header != null) {
+            _ = try writer.print("DIFF{c}{s}\n", .{ options.diffSpaceing, header.? });
+        }
     }
 
     while (try fileB.getLine()) |line| {
@@ -170,20 +181,20 @@ fn uniqueDiff(options: *Options, allocator: std.mem.Allocator) !void {
             if (entry.count > 0) {
                 if (!try fieldSet.valueMatches(entry, line)) {
                     if (options.color) try writer.print("\x1B[31m", .{});
-                    _ = try writer.print("< {s}\n", .{entry.line.?});
+                    _ = try writer.print("<{c}{s}\n", .{ options.diffSpaceing, entry.line.? });
                     if (options.color) try writer.print("\x1B[32m", .{});
-                    _ = try writer.print("> {s}\n", .{line});
+                    _ = try writer.print(">{c}{s}\n", .{ options.diffSpaceing, line });
                     if (options.color) try writer.print("\x1B[0m", .{});
                 }
                 entry.count -= 1;
             } else {
                 if (options.color) try writer.print("\x1B[32m", .{});
-                _ = try writer.print("+ {s}\n", .{line});
+                _ = try writer.print("+{c}{s}\n", .{ options.diffSpaceing, line });
                 if (options.color) try writer.print("\x1B[0m", .{});
             }
         } else {
             if (options.color) try writer.print("\x1B[32m", .{});
-            _ = try writer.print("+ {s}\n", .{line});
+            _ = try writer.print("+{c}{s}\n", .{ options.diffSpaceing, line });
             if (options.color) try writer.print("\x1B[0m", .{});
         }
     }
@@ -191,7 +202,7 @@ fn uniqueDiff(options: *Options, allocator: std.mem.Allocator) !void {
         if (entry.line != null and entry.count > 0) {
             for (0..entry.count) |_| {
                 if (options.color) try writer.print("\x1B[31m", .{});
-                _ = try writer.print("- {s}\n", .{entry.line.?});
+                _ = try writer.print("-{c}{s}\n", .{ options.diffSpaceing, entry.line.? });
                 if (options.color) try writer.print("\x1B[0m", .{});
             }
         }
