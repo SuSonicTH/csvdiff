@@ -145,13 +145,13 @@ pub const Parser = struct {
     }
 
     fn printUsage() !void {
-        const help = @embedFile("USAGE.txt");
+        const help = @embedFile("./USAGE.txt");
         try std.io.getStdOut().writeAll(version ++ "\n" ++ help);
         try ExitCode.OK.exit();
     }
 
     fn printVersion() !void {
-        const license = @embedFile("LICENSE.txt");
+        const license = @embedFile("./LICENSE.txt");
         try std.io.getStdOut().writeAll(version ++ "\n\n" ++ license);
         try ExitCode.exit(.OK);
     }

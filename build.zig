@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub fn build(b: *std.Build) void {
+pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
@@ -10,6 +10,9 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+
+    const src = std.fs.cwd().openDir("./src", .{}) catch @panic("could not get ./src/ dir");
+    std.fs.cwd().copyFile("./LICENSE.txt", src, "LICENSE.txt", .{}) catch @panic("could not copy ./LICENSE.txt to ./src/LICENSE.TXT");
 
     if (optimize != .Debug) {
         exe.root_module.strip = true;
