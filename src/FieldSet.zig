@@ -1,5 +1,5 @@
 const std = @import("std");
-const CsvLine = @import("CsvLine").CsvLine;
+const CsvLine = @import("CsvLine.zig");
 const StringJoiner = @import("StringJoiner.zig");
 
 const Self = @This();
@@ -43,7 +43,7 @@ pub fn init(initialSize: usize, keyIndices: []usize, valueIndices: []usize, csvL
     };
 
     inline for (0..@intFromEnum(FieldType.VALUE2) + 1) |index| {
-        set.fieldValue[index] = try StringJoiner.init(allocator, '|', 1024);
+        set.fieldValue[index] = try StringJoiner.init(allocator, '|');
     }
 
     @memset(set.data, .{
@@ -214,6 +214,7 @@ inline fn keyMatches(self: *Self, entry: *SetEntry, hash: u32, key: []const u8) 
 }
 
 pub inline fn valueMatches(self: *Self, entry: *SetEntry, line: []const u8) !bool {
+    if (self.valueIndices.len == 0) return true;
     const value = try self.getSelectedFields(.VALUE, line);
     const entryValue = try self.getSelectedFields(.VALUE2, entry.line.?);
     return std.mem.eql(u8, value, entryValue);

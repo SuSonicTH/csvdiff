@@ -7,7 +7,7 @@ const config = @import("config.zig");
 const FileReader = @import("FileReader.zig");
 const LineSet = @import("LineSet.zig");
 const FieldSet = @import("FieldSet.zig");
-const CsvLine = @import("CsvLine").CsvLine;
+const CsvLine = @import("CsvLine.zig");
 const builtin = @import("builtin");
 
 pub fn main() !void {
@@ -34,8 +34,19 @@ pub fn main() !void {
 fn _main(allocator: std.mem.Allocator) !void {
     var timer = try std.time.Timer.start();
 
-    var options = try parseArgumentsToOptions(allocator);
+    var options = try Options.init(allocator);
     defer options.deinit();
+
+    if (config.readConfigFromFile("default.config", allocator) catch null) |defaultArguments| {
+        try ArgumentParser.parse(&options, defaultArguments.items, allocator);
+    }
+    const args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
+    const arguments = try castArgs(args, allocator);
+    defer allocator.free(arguments);
+
+    try ArgumentParser.parse(&options, arguments, allocator);
+    try ArgumentParser.validateArguments(&options);
 
     if (options.listHeader) {
         try listHeader(options, allocator);
@@ -56,23 +67,6 @@ fn _main(allocator: std.mem.Allocator) !void {
     }
 }
 
-fn parseArgumentsToOptions(allocator: std.mem.Allocator) !Options {
-    var options = try Options.init(allocator);
-
-    if (config.readConfigFromFile("default.config", allocator) catch null) |defaultArguments| {
-        try ArgumentParser.parse(&options, defaultArguments.items, allocator);
-    }
-
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
-    const arguments = try castArgs(args, allocator);
-    defer allocator.free(arguments);
-
-    try ArgumentParser.parse(&options, arguments, allocator);
-    try ArgumentParser.validateArguments(&options);
-    return options;
-}
-
 fn castArgs(args: [][:0]u8, allocator: std.mem.Allocator) ![][]const u8 {
     var ret = try allocator.alloc([]const u8, args.len);
     for (args, 0..) |arg, i| {
@@ -83,6 +77,7 @@ fn castArgs(args: [][:0]u8, allocator: std.mem.Allocator) ![][]const u8 {
 
 fn listHeader(options: Options, allocator: std.mem.Allocator) !void {
     var csvLine = try CsvLine.init(allocator, .{ .separator = options.inputSeparator[0], .trim = options.trim, .quoute = if (options.inputQuoute) |quote| quote[0] else null });
+    defer csvLine.deinit();
     var file = try FileReader.init(options.inputFiles.items[0]);
     defer file.deinit();
 
@@ -139,7 +134,7 @@ fn uniqueDiff(options: *Options, allocator: std.mem.Allocator) !void {
     defer fileB.deinit();
 
     var csvLine = try CsvLine.init(allocator, .{ .separator = options.inputSeparator[0], .trim = options.trim, .quoute = if (options.inputQuoute) |quote| quote[0] else null });
-    defer csvLine.free();
+    defer csvLine.deinit();
 
     if (options.fileHeader) {
         if (try fileA.getLine()) |line| {

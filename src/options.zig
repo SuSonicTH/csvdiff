@@ -1,5 +1,5 @@
 const std = @import("std");
-const CsvLine = @import("CsvLine").CsvLine;
+const CsvLine = @import("CsvLine.zig");
 
 const Selection = union(enum) {
     name: []const u8,
@@ -50,7 +50,7 @@ pub const Options = struct {
             self.allocator.free(header);
         }
         if (self.csvLine != null) {
-            self.csvLine.?.free();
+            self.csvLine.?.deinit();
         }
     }
 

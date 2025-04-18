@@ -1,13 +1,17 @@
 const std = @import("std");
 const Self = @This();
-const defaultSize = 1024;
+const defaultSize = 128;
 
 allocator: std.mem.Allocator,
 buffer: []u8,
 len: usize = 0,
 separator: u8 = undefined,
 
-pub fn init(allocator: std.mem.Allocator, separator: u8, size: usize) !Self {
+pub fn init(allocator: std.mem.Allocator, separator: u8) !Self {
+    return initSized(allocator, separator, defaultSize);
+}
+
+pub fn initSized(allocator: std.mem.Allocator, separator: u8, size: usize) !Self {
     const reseved = switch (size) {
         0 => defaultSize,
         else => size,
@@ -17,6 +21,10 @@ pub fn init(allocator: std.mem.Allocator, separator: u8, size: usize) !Self {
         .buffer = try allocator.alloc(u8, reseved),
         .separator = separator,
     };
+}
+
+pub fn deinit(self: *Self) void {
+    self.allocator.free(self.buffer);
 }
 
 pub inline fn add(self: *Self, string: []const u8) !void {
@@ -29,7 +37,7 @@ pub inline fn add(self: *Self, string: []const u8) !void {
     self.len += string.len;
 }
 
-pub fn get(self: *Self) []u8 {
+pub inline fn get(self: *Self) []u8 {
     return self.buffer[0..self.len];
 }
 
@@ -52,30 +60,56 @@ pub fn isEmpty(self: *Self) bool {
     return self.len == 0;
 }
 
-pub fn deinit(self: *Self) void {
-    self.allocator.free(self.buffer);
-}
-
 const testing = std.testing;
 
 test "stringJoinerTest" {
-    var joiner = try init(testing.allocator, ',', 1);
+    var joiner = try initSized(testing.allocator, ',', 1);
     defer joiner.deinit();
 
     try testing.expectEqualStrings("", joiner.get());
     try testing.expectEqual(true, joiner.isEmpty());
+    try testing.expectEqual(0, joiner.len);
+    try testing.expectEqual(1, joiner.buffer.len);
 
     try joiner.add("ABC");
     try testing.expectEqualStrings("ABC", joiner.get());
     try testing.expectEqual(false, joiner.isEmpty());
+    try testing.expectEqual(3, joiner.len);
+    try testing.expectEqual(4, joiner.buffer.len);
 
     try joiner.add("DEF");
     try testing.expectEqualStrings("ABC,DEF", joiner.get());
+    try testing.expectEqual(7, joiner.len);
+    try testing.expectEqual(8, joiner.buffer.len);
 
     try joiner.add("GHIJKLMNOPQRSTUVWXYZ");
     try testing.expectEqualStrings("ABC,DEF,GHIJKLMNOPQRSTUVWXYZ", joiner.get());
+    try testing.expectEqual(28, joiner.len);
+    try testing.expectEqual(32, joiner.buffer.len);
 
     joiner.clear();
     try testing.expectEqualStrings("", joiner.get());
     try testing.expectEqual(true, joiner.isEmpty());
+    try testing.expectEqual(0, joiner.len);
+    try testing.expectEqual(32, joiner.buffer.len);
+}
+
+test "stringJoinerTest init" {
+    var joiner = try init(testing.allocator, ',');
+    defer joiner.deinit();
+
+    try testing.expectEqualStrings("", joiner.get());
+    try testing.expectEqual(true, joiner.isEmpty());
+    try testing.expectEqual(0, joiner.len);
+    try testing.expectEqual(defaultSize, joiner.buffer.len);
+}
+
+test "stringJoinerTest initSized zero" {
+    var joiner = try initSized(testing.allocator, ',', 0);
+    defer joiner.deinit();
+
+    try testing.expectEqualStrings("", joiner.get());
+    try testing.expectEqual(true, joiner.isEmpty());
+    try testing.expectEqual(0, joiner.len);
+    try testing.expectEqual(defaultSize, joiner.buffer.len);
 }
