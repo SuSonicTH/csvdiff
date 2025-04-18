@@ -109,16 +109,23 @@ fn lineDiff(options: Options, allocator: std.mem.Allocator) !void {
             if (entry.count > 0) {
                 entry.count -= 1;
             } else {
+                if (options.color) try writer.print("\x1B[32m", .{});
                 _ = try writer.print("+ {s}\n", .{line});
+                if (options.color) try writer.print("\x1B[0m", .{});
             }
         } else {
+            if (options.color) try writer.print("\x1B[32m", .{});
             _ = try writer.print("+ {s}\n", .{line});
+            if (options.color) try writer.print("\x1B[30m", .{});
         }
     }
+
     for (lineSet.data) |entry| {
         if (entry.line != null and entry.count > 0) {
             for (0..entry.count) |_| {
+                if (options.color) try writer.print("\x1B[31m", .{});
                 _ = try writer.print("- {s}\n", .{entry.line.?});
+                if (options.color) try writer.print("\x1B[30m", .{});
             }
         }
     }
@@ -162,21 +169,30 @@ fn uniqueDiff(options: *Options, allocator: std.mem.Allocator) !void {
         if (try fieldSet.get(line)) |entry| {
             if (entry.count > 0) {
                 if (!try fieldSet.valueMatches(entry, line)) {
+                    if (options.color) try writer.print("\x1B[31m", .{});
                     _ = try writer.print("< {s}\n", .{entry.line.?});
+                    if (options.color) try writer.print("\x1B[32m", .{});
                     _ = try writer.print("> {s}\n", .{line});
+                    if (options.color) try writer.print("\x1B[0m", .{});
                 }
                 entry.count -= 1;
             } else {
+                if (options.color) try writer.print("\x1B[32m", .{});
                 _ = try writer.print("+ {s}\n", .{line});
+                if (options.color) try writer.print("\x1B[0m", .{});
             }
         } else {
+            if (options.color) try writer.print("\x1B[32m", .{});
             _ = try writer.print("+ {s}\n", .{line});
+            if (options.color) try writer.print("\x1B[0m", .{});
         }
     }
     for (fieldSet.data) |entry| {
         if (entry.line != null and entry.count > 0) {
             for (0..entry.count) |_| {
+                if (options.color) try writer.print("\x1B[31m", .{});
                 _ = try writer.print("- {s}\n", .{entry.line.?});
+                if (options.color) try writer.print("\x1B[0m", .{});
             }
         }
     }

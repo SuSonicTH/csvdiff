@@ -29,6 +29,7 @@ const Argument = enum {
     @"-o",
     @"--output",
     @"--time",
+    @"--color",
 };
 
 const Separator = enum {
@@ -99,6 +100,9 @@ pub const Parser = struct {
                     },
                     .@"--time" => {
                         options.time = true;
+                    },
+                    .@"--color" => {
+                        options.color = true;
                     },
                 }
             } else {
