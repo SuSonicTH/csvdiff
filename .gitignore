@@ -4,3 +4,4 @@ zig-out
 .vscode/
 /*.html
 *.config
+src/LICENSE.txt
