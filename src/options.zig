@@ -11,6 +11,23 @@ const OptionError = error{
     NoHeader,
 };
 
+const Colors = struct {
+    red: []const u8 = "\x1B[31m",
+    green: []const u8 = "\x1B[31m",
+    reset: []const u8 = "\x1B[0m",
+
+    pub fn get(colors: bool) Colors {
+        if (!colors) {
+            return .{
+                .red = "",
+                .green = "",
+                .reset = "",
+            };
+        }
+        return .{};
+    }
+};
+
 pub const Options = struct {
     allocator: std.mem.Allocator,
     csvLine: ?CsvLine = null,
@@ -128,6 +145,10 @@ pub const Options = struct {
                 count += 1;
             }
         }
+    }
+
+    pub fn getColors(self: *Options) Colors {
+        return Colors.get(self.color);
     }
 };
 

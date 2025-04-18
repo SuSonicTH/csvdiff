@@ -51,7 +51,7 @@ fn _main(allocator: std.mem.Allocator) !void {
     if (options.listHeader) {
         try listHeader(options, allocator);
     } else if (options.keyFields == null) {
-        try lineDiff(options, allocator);
+        try lineDiff(&options, allocator);
     } else {
         try uniqueDiff(&options, allocator);
     }
@@ -90,7 +90,7 @@ fn listHeader(options: Options, allocator: std.mem.Allocator) !void {
     }
 }
 
-fn lineDiff(options: Options, allocator: std.mem.Allocator) !void {
+fn lineDiff(options: *Options, allocator: std.mem.Allocator) !void {
     var fileA = try FileReader.init(options.inputFiles.items[0]);
     defer fileA.deinit();
 
@@ -112,28 +112,24 @@ fn lineDiff(options: Options, allocator: std.mem.Allocator) !void {
         fileA.reset();
     }
 
+    const color = options.getColors();
+
     while (try fileB.getLine()) |line| {
         if (lineSet.get(line)) |entry| {
             if (entry.count > 0) {
                 entry.count -= 1;
             } else {
-                if (options.color) try writer.print("\x1B[32m", .{});
-                _ = try writer.print("+{c}{s}\n", .{ options.diffSpaceing, line });
-                if (options.color) try writer.print("\x1B[0m", .{});
+                _ = try writer.print("{s}+{c}{s}{s}\n", .{ color.green, options.diffSpaceing, line, color.reset });
             }
         } else {
-            if (options.color) try writer.print("\x1B[32m", .{});
-            _ = try writer.print("+{c}{s}\n", .{ options.diffSpaceing, line });
-            if (options.color) try writer.print("\x1B[30m", .{});
+            _ = try writer.print("{s}+{c}{s}{s}\n", .{ color.green, options.diffSpaceing, line, color.reset });
         }
     }
 
     for (lineSet.data) |entry| {
         if (entry.line != null and entry.count > 0) {
             for (0..entry.count) |_| {
-                if (options.color) try writer.print("\x1B[31m", .{});
-                _ = try writer.print("-{c}{s}\n", .{ options.diffSpaceing, entry.line.? });
-                if (options.color) try writer.print("\x1B[30m", .{});
+                _ = try writer.print("{s}-{c}{s}{s}\n", .{ color.red, options.diffSpaceing, entry.line.?, color.reset });
             }
         }
     }
@@ -176,34 +172,27 @@ fn uniqueDiff(options: *Options, allocator: std.mem.Allocator) !void {
         }
     }
 
+    const color = options.getColors();
+
     while (try fileB.getLine()) |line| {
         if (try fieldSet.get(line)) |entry| {
             if (entry.count > 0) {
                 if (!try fieldSet.valueMatches(entry, line)) {
-                    if (options.color) try writer.print("\x1B[31m", .{});
-                    _ = try writer.print("<{c}{s}\n", .{ options.diffSpaceing, entry.line.? });
-                    if (options.color) try writer.print("\x1B[32m", .{});
-                    _ = try writer.print(">{c}{s}\n", .{ options.diffSpaceing, line });
-                    if (options.color) try writer.print("\x1B[0m", .{});
+                    _ = try writer.print("{s}<{c}{s}{s}\n", .{ color.red, options.diffSpaceing, entry.line.?, color.reset });
+                    _ = try writer.print("{s}>{c}{s}{s}\n", .{ color.red, options.diffSpaceing, line, color.reset });
                 }
                 entry.count -= 1;
             } else {
-                if (options.color) try writer.print("\x1B[32m", .{});
-                _ = try writer.print("+{c}{s}\n", .{ options.diffSpaceing, line });
-                if (options.color) try writer.print("\x1B[0m", .{});
+                _ = try writer.print("{s}+{c}{s}{s}\n", .{ color.green, options.diffSpaceing, line, color.reset });
             }
         } else {
-            if (options.color) try writer.print("\x1B[32m", .{});
-            _ = try writer.print("+{c}{s}\n", .{ options.diffSpaceing, line });
-            if (options.color) try writer.print("\x1B[0m", .{});
+            _ = try writer.print("{s}+{c}{s}{s}\n", .{ color.green, options.diffSpaceing, line, color.reset });
         }
     }
     for (fieldSet.data) |entry| {
         if (entry.line != null and entry.count > 0) {
             for (0..entry.count) |_| {
-                if (options.color) try writer.print("\x1B[31m", .{});
-                _ = try writer.print("-{c}{s}\n", .{ options.diffSpaceing, entry.line.? });
-                if (options.color) try writer.print("\x1B[0m", .{});
+                _ = try writer.print("{s}-{c}{s}{s}\n", .{ color.red, options.diffSpaceing, entry.line.?, color.green });
             }
         }
     }
