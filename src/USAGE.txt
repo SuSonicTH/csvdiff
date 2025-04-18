@@ -27,11 +27,6 @@ Options:
 
      -h, --header [h1,h2,...]   use given heder (field1,field2,...)
      -n, --noHeader             file has no header
-         --lengths [1,2,...]    comma separated list of field lengths
-                                processes input as fixed filed (record) length
-
-         --extraLF              with --lengths to read an extra end of line
-         --extraCRLF            with --lengths to read 2 extra EOL characters
 
   processing:
      -k, --key [k1,k2,...]     fileds to use as primary key
