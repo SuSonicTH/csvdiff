@@ -103,13 +103,14 @@ fn lineDiff(options: *Options, allocator: std.mem.Allocator) !void {
         try lineSet.put(line);
     }
 
-    const writer = std.io.getStdOut().writer();
+    var bufferedWriter = std.io.bufferedWriter(std.io.getStdOut().writer());
+    const writer = bufferedWriter.writer().any();
 
     if (options.asCsv and options.fileHeader) {
         if (try fileB.getLine()) |header| {
             _ = try writer.print("DIFF{c}{s}\n", .{ options.diffSpaceing, header });
         }
-        fileA.reset();
+        fileB.reset();
     }
 
     const color = options.getColors();
@@ -133,10 +134,12 @@ fn lineDiff(options: *Options, allocator: std.mem.Allocator) !void {
             }
         }
     }
+    try bufferedWriter.flush();
 }
 
 fn uniqueDiff(options: *Options, allocator: std.mem.Allocator) !void {
-    const writer = std.io.getStdOut().writer();
+    var bufferedWriter = std.io.bufferedWriter(std.io.getStdOut().writer());
+    const writer = bufferedWriter.writer().any();
 
     var fileA = try FileReader.init(options.inputFiles.items[0]);
     defer fileA.deinit();
@@ -189,6 +192,7 @@ fn uniqueDiff(options: *Options, allocator: std.mem.Allocator) !void {
             _ = try writer.print("{s}+{c}{s}{s}\n", .{ color.green, options.diffSpaceing, line, color.reset });
         }
     }
+
     for (fieldSet.data) |entry| {
         if (entry.line != null and entry.count > 0) {
             for (0..entry.count) |_| {
@@ -196,6 +200,8 @@ fn uniqueDiff(options: *Options, allocator: std.mem.Allocator) !void {
             }
         }
     }
+
+    try bufferedWriter.flush();
 }
 
 test {
