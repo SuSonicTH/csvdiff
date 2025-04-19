@@ -2,7 +2,6 @@ const std = @import("std");
 const ExitCode = @import("exitCode.zig").ExitCode;
 const Options = @import("options.zig").Options;
 const ArgumentParser = @import("arguments.zig").Parser;
-const Utf8Output = @import("Utf8Output.zig");
 const config = @import("config.zig");
 const FileReader = @import("FileReader.zig");
 const LineSet = @import("LineSet.zig");
@@ -11,9 +10,6 @@ const CsvLine = @import("CsvLine.zig");
 const builtin = @import("builtin");
 
 pub fn main() !void {
-    Utf8Output.init();
-    defer Utf8Output.deinit();
-
     var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
     const allocator, const is_debug = gpa: {
         break :gpa switch (builtin.mode) {
