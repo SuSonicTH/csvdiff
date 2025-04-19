@@ -6,6 +6,7 @@ const ExitCode = @import("exitCode.zig").ExitCode;
 const version = @import("exitCode.zig").version;
 
 const Argument = enum {
+    @"-h",
     @"--help",
     @"-v",
     @"--version",
@@ -13,7 +14,6 @@ const Argument = enum {
     @"--separator",
     @"-q",
     @"--quoute",
-    @"-h",
     @"--header",
     @"-n",
     @"--noHeader",
@@ -26,8 +26,6 @@ const Argument = enum {
     @"--listHeader",
     @"--exitCodes",
     @"--config",
-    @"-o",
-    @"--output",
     @"--time",
     @"--color",
     @"--asCsv",
@@ -69,17 +67,13 @@ pub const Parser = struct {
                 switch (std.meta.stringToEnum(Argument, arg) orelse {
                     try ExitCode.unknownArgumentError.printErrorAndExit(.{arg});
                 }) {
-                    .@"--help" => try printUsage(),
+                    .@"-h", .@"--help" => try printUsage(),
                     .@"-v", .@"--version" => try printVersion(),
                     .@"-s", .@"--separator" => options.inputSeparator = try getSeparator(args, index, arg),
                     .@"-q", .@"--quoute" => options.inputQuoute = try getQuoute(args, index, arg),
                     .@"--trim" => options.trim = true,
                     .@"-l", .@"--listHeader" => options.listHeader = true,
-                    .@"-o", .@"--output" => {
-                        options.outputName = try argumentValue(args, index, arg);
-                        skipNext();
-                    },
-                    .@"-h", .@"--header" => {
+                    .@"--header" => {
                         try options.setHeader(try argumentValue(args, index, arg));
                         options.fileHeader = false;
                         skipNext();

@@ -42,7 +42,6 @@ pub const Options = struct {
     trim: bool = false,
     listHeader: bool = false,
     inputFiles: std.ArrayList([]const u8),
-    outputName: ?[]const u8 = null,
     time: bool = false,
     color: bool = false,
     asCsv: bool = false,

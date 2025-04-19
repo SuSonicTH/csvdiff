@@ -28,7 +28,7 @@ Options:
      -q, --quote single         use single quouttes (')
      -q, --quote double         use double quoutes (")
 
-     -h, --header [h1,h2,...]   use given heder (field1,field2,...)
+         --header [h1,h2,...]   use given heder (field1,field2,...)
      -n, --noHeader             file has no header
 
   processing:
