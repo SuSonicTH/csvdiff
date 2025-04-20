@@ -13,7 +13,7 @@ const OptionError = error{
 
 const Colors = struct {
     red: []const u8 = "\x1B[31m",
-    green: []const u8 = "\x1B[31m",
+    green: []const u8 = "\x1B[32m",
     reset: []const u8 = "\x1B[0m",
 
     pub fn get(colors: bool) Colors {
