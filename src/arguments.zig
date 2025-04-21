@@ -29,6 +29,8 @@ const Argument = enum {
     @"--time",
     @"--color",
     @"--asCsv",
+    @"-f",
+    @"--fieldDiff",
 };
 
 const Separator = enum {
@@ -101,6 +103,9 @@ pub const Parser = struct {
                     },
                     .@"--asCsv" => {
                         options.asCsv = true;
+                    },
+                    .@"-f", .@"--fieldDiff" => {
+                        options.fieldDiff = true;
                     },
                 }
             } else {

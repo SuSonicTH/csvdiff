@@ -1,6 +1,8 @@
 const std = @import("std");
 const ExitCode = @import("exitCode.zig").ExitCode;
 const Options = @import("options.zig").Options;
+const Colors = @import("options.zig").Colors;
+const FieldType = @import("options.zig").FieldType;
 const ArgumentParser = @import("arguments.zig").Parser;
 const config = @import("config.zig");
 const FileReader = @import("FileReader.zig");
@@ -171,14 +173,25 @@ fn uniqueDiff(options: *Options, allocator: std.mem.Allocator) !void {
         }
     }
 
-    const color = options.getColors();
+    if (options.fieldDiff) {
+        var csvLineB = try CsvLine.init(allocator, .{ .separator = options.inputSeparator[0], .trim = options.trim, .quoute = if (options.inputQuoute) |quote| quote[0] else null });
+        defer csvLineB.deinit();
+        try uniqueDiffPerField(&fileB, &fieldSet, writer, options, &csvLine, &csvLineB);
+    } else {
+        try uniqueDiffPerLine(&fileB, &fieldSet, writer, options);
+    }
 
+    try bufferedWriter.flush();
+}
+
+fn uniqueDiffPerLine(fileB: *FileReader, fieldSet: *FieldSet, writer: std.io.AnyWriter, options: *Options) !void {
+    const color = options.getColors();
     while (try fileB.getLine()) |line| {
         if (try fieldSet.get(line)) |entry| {
             if (entry.count > 0) {
                 if (!try fieldSet.valueMatches(entry, line)) {
                     _ = try writer.print("{s}<{c}{s}{s}\n", .{ color.red, options.diffSpaceing, entry.line.?, color.reset });
-                    _ = try writer.print("{s}>{c}{s}{s}\n", .{ color.red, options.diffSpaceing, line, color.reset });
+                    _ = try writer.print("{s}>{c}{s}{s}\n", .{ color.green, options.diffSpaceing, line, color.reset });
                 }
                 entry.count -= 1;
             } else {
@@ -196,8 +209,55 @@ fn uniqueDiff(options: *Options, allocator: std.mem.Allocator) !void {
             }
         }
     }
+}
 
-    try bufferedWriter.flush();
+fn uniqueDiffPerField(fileB: *FileReader, fieldSet: *FieldSet, writer: std.io.AnyWriter, options: *Options, csvLineA: *CsvLine, csvLineB: *CsvLine) !void {
+    const color = options.getColors();
+    while (try fileB.getLine()) |line| {
+        if (try fieldSet.get(line)) |entry| {
+            if (entry.count > 0) {
+                if (!try fieldSet.valueMatches(entry, line)) {
+                    _ = try writer.print("{s}~{s}{c}", .{ color.blue, color.reset, options.diffSpaceing });
+                    const fieldsA = try csvLineA.parse(entry.line.?);
+                    const fieldsB = try csvLineB.parse(line);
+                    for (fieldsA, 0..) |fieldA, index| {
+                        const fieldB = fieldsB[index];
+                        switch (options.fieldTypes.?[index]) {
+                            .KEY => {
+                                _ = try writer.print("{s}{s}{s}", .{ color.blue, fieldA, color.reset });
+                            },
+                            .VALUE => {
+                                if (std.mem.eql(u8, fieldA, fieldB)) {
+                                    _ = try writer.print("{s}{s}{s}", .{ color.blue, fieldA, color.reset });
+                                } else {
+                                    _ = try writer.print("{s}{s}|{s}{s}{s}", .{ color.red, fieldA, color.green, fieldB, color.reset });
+                                }
+                            },
+                            .EXCLUDED => {
+                                _ = try writer.print("{s}", .{fieldB});
+                            },
+                        }
+                        if (index <= fieldA.len - 2)
+                            _ = try writer.print("{c}", .{options.inputSeparator[0]});
+                    }
+                    _ = try writer.print("\n", .{});
+                }
+                entry.count -= 1;
+            } else {
+                _ = try writer.print("{s}+{c}{s}{s}\n", .{ color.green, options.diffSpaceing, line, color.reset });
+            }
+        } else {
+            _ = try writer.print("{s}+{c}{s}{s}\n", .{ color.green, options.diffSpaceing, line, color.reset });
+        }
+    }
+
+    for (fieldSet.data) |entry| {
+        if (entry.line != null and entry.count > 0) {
+            for (0..entry.count) |_| {
+                _ = try writer.print("{s}-{c}{s}{s}\n", .{ color.red, options.diffSpaceing, entry.line.?, color.reset });
+            }
+        }
+    }
 }
 
 test {

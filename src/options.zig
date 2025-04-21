@@ -14,6 +14,7 @@ const OptionError = error{
 const Colors = struct {
     red: []const u8 = "\x1B[31m",
     green: []const u8 = "\x1B[32m",
+    blue: []const u8 = "\x1B[34m",
     reset: []const u8 = "\x1B[0m",
 
     pub fn get(colors: bool) Colors {
@@ -28,6 +29,12 @@ const Colors = struct {
     }
 };
 
+pub const FieldType = enum {
+    KEY,
+    VALUE,
+    EXCLUDED,
+};
+
 pub const Options = struct {
     allocator: std.mem.Allocator,
     csvLine: ?CsvLine = null,
@@ -39,6 +46,7 @@ pub const Options = struct {
     excludedFields: ?SelectionList = null,
     keyIndices: ?[]usize = null,
     valueIndices: ?[]usize = null,
+    fieldTypes: ?[]FieldType = null,
     trim: bool = false,
     listHeader: bool = false,
     inputFiles: std.ArrayList([]const u8),
@@ -46,6 +54,7 @@ pub const Options = struct {
     color: bool = false,
     asCsv: bool = false,
     diffSpaceing: u8 = ' ',
+    fieldDiff: bool = false,
 
     pub fn init(allocator: std.mem.Allocator) !Options {
         return .{
@@ -64,6 +73,9 @@ pub const Options = struct {
         }
         if (self.valueIndices) |valueIndices| {
             self.allocator.free(valueIndices);
+        }
+        if (self.fieldTypes) |fieldTypes| {
+            self.allocator.free(fieldTypes);
         }
         if (self.header) |header| {
             self.allocator.free(header);
@@ -144,6 +156,27 @@ pub const Options = struct {
                 count += 1;
             }
         }
+
+        if (self.fieldDiff) {
+            self.fieldTypes = try self.allocator.alloc(FieldType, self.header.?.len);
+            for (0..self.header.?.len) |index| {
+                self.fieldTypes.?[index] = self.getFieldType(index);
+            }
+        }
+    }
+
+    fn getFieldType(self: *Options, index: usize) FieldType {
+        for (self.keyIndices.?) |key| {
+            if (key == index) {
+                return .KEY;
+            }
+        }
+        for (self.valueIndices.?) |value| {
+            if (value == index) {
+                return .VALUE;
+            }
+        }
+        return .EXCLUDED;
     }
 
     pub fn getColors(self: *Options) Colors {
