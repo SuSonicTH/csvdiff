@@ -237,8 +237,9 @@ fn uniqueDiffPerField(fileB: *FileReader, fieldSet: *FieldSet, writer: std.io.An
                                 _ = try writer.print("{s}", .{fieldB});
                             },
                         }
-                        if (index <= fieldA.len - 2)
+                        if (index < fieldsA.len - 1) {
                             _ = try writer.print("{c}", .{options.inputSeparator[0]});
+                        }
                     }
                     _ = try writer.print("\n", .{});
                 }
