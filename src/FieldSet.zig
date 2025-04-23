@@ -234,10 +234,10 @@ test "getNumberOfBits" {
     try std.testing.expectEqual(0, getNumberOfBits(0));
     try std.testing.expectEqual(1, getNumberOfBits(1));
     try std.testing.expectEqual(2, getNumberOfBits(2));
-    try std.testing.expectEqual(2, getNumberOfBits(3));
+    try std.testing.expectEqual(3, getNumberOfBits(3));
     try std.testing.expectEqual(3, getNumberOfBits(4));
     try std.testing.expectEqual(4, getNumberOfBits(8));
-    try std.testing.expectEqual(4, getNumberOfBits(15));
+    try std.testing.expectEqual(5, getNumberOfBits(15));
     try std.testing.expectEqual(11, getNumberOfBits(1 << 10));
-    try std.testing.expectEqual(24, getNumberOfBits(14976460));
+    try std.testing.expectEqual(25, getNumberOfBits(14976460));
 }

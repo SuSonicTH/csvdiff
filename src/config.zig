@@ -213,11 +213,11 @@ test "reads it" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
 
-    const arguments = try readConfigFromFile("test/test.config", allocator);
+    const arguments = try readConfigFromFile("src/test/test.config", allocator);
 
     const expectEqualStrings = std.testing.expectEqualStrings;
 
-    try expectEqualStrings("test/test.config", arguments.items[0]);
+    try expectEqualStrings("src/test/test.config", arguments.items[0]);
     try expectEqualStrings("--header", arguments.items[1]);
     try expectEqualStrings("1,2,3", arguments.items[2]);
     try expectEqualStrings("--trim", arguments.items[3]);

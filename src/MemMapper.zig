@@ -92,8 +92,8 @@ const testUtils = @import("testUtils.zig");
 const writeFile = testUtils.writeFile;
 
 test "simple mapping for reading" {
-    const message = "This is a Test";
-    const fileName = "./test/MemMapperReading.txt";
+    const message = @embedFile("test/MemMapperReading.txt");
+    const fileName = "./src/test/MemMapperReading.txt";
 
     try writeFile(fileName, message);
 

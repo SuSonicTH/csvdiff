@@ -46,13 +46,7 @@ fn _main(allocator: std.mem.Allocator) !void {
     try ArgumentParser.parse(&options, arguments, allocator);
     try ArgumentParser.validateArguments(&options);
 
-    if (options.listHeader) {
-        try listHeader(options, allocator);
-    } else if (options.keyFields == null) {
-        try lineDiff(&options, allocator);
-    } else {
-        try uniqueDiff(&options, allocator);
-    }
+    try doDiff(&options, allocator);
 
     if (options.time) {
         const timeNeeded = @as(f32, @floatFromInt(timer.lap())) / 1000000.0;
@@ -73,7 +67,21 @@ fn castArgs(args: [][:0]u8, allocator: std.mem.Allocator) ![][]const u8 {
     return ret;
 }
 
-fn listHeader(options: Options, allocator: std.mem.Allocator) !void {
+fn doDiff(options: *Options, allocator: std.mem.Allocator) !void {
+    var bufferedWriter = std.io.bufferedWriter(std.io.getStdOut().writer());
+    defer bufferedWriter.flush() catch {};
+    const writer = bufferedWriter.writer().any();
+
+    if (options.listHeader) {
+        try listHeader(options, allocator);
+    } else if (options.keyFields == null) {
+        try lineDiff(options, writer, allocator);
+    } else {
+        try uniqueDiff(options, writer, allocator);
+    }
+}
+
+fn listHeader(options: *Options, allocator: std.mem.Allocator) !void {
     var csvLine = try CsvLine.init(allocator, .{ .separator = options.inputSeparator[0], .trim = options.trim, .quoute = if (options.inputQuoute) |quote| quote[0] else null });
     defer csvLine.deinit();
     var file = try FileReader.init(options.inputFiles.items[0]);
@@ -88,7 +96,7 @@ fn listHeader(options: Options, allocator: std.mem.Allocator) !void {
     }
 }
 
-fn lineDiff(options: *Options, allocator: std.mem.Allocator) !void {
+fn lineDiff(options: *Options, writer: std.io.AnyWriter, allocator: std.mem.Allocator) !void {
     var fileA = try FileReader.init(options.inputFiles.items[0]);
     defer fileA.deinit();
 
@@ -100,9 +108,6 @@ fn lineDiff(options: *Options, allocator: std.mem.Allocator) !void {
     while (try fileA.getLine()) |line| {
         try lineSet.put(line);
     }
-
-    var bufferedWriter = std.io.bufferedWriter(std.io.getStdOut().writer());
-    const writer = bufferedWriter.writer().any();
 
     if (options.asCsv and options.fileHeader) {
         if (try fileB.getLine()) |header| {
@@ -132,13 +137,9 @@ fn lineDiff(options: *Options, allocator: std.mem.Allocator) !void {
             }
         }
     }
-    try bufferedWriter.flush();
 }
 
-fn uniqueDiff(options: *Options, allocator: std.mem.Allocator) !void {
-    var bufferedWriter = std.io.bufferedWriter(std.io.getStdOut().writer());
-    const writer = bufferedWriter.writer().any();
-
+fn uniqueDiff(options: *Options, writer: std.io.AnyWriter, allocator: std.mem.Allocator) !void {
     var fileA = try FileReader.init(options.inputFiles.items[0]);
     defer fileA.deinit();
 
@@ -180,8 +181,6 @@ fn uniqueDiff(options: *Options, allocator: std.mem.Allocator) !void {
     } else {
         try uniqueDiffPerLine(&fileB, &fieldSet, writer, options);
     }
-
-    try bufferedWriter.flush();
 }
 
 fn uniqueDiffPerLine(fileB: *FileReader, fieldSet: *FieldSet, writer: std.io.AnyWriter, options: *Options) !void {
@@ -259,6 +258,71 @@ fn uniqueDiffPerField(fileB: *FileReader, fieldSet: *FieldSet, writer: std.io.An
             }
         }
     }
+}
+
+// Test
+const testing = std.testing;
+const NO_DIFF = "";
+
+const TestRun = struct {
+    output: std.ArrayList(u8),
+    options: Options,
+    expected: []const u8,
+
+    fn init(file1: []const u8, file2: []const u8, comptime expected: []const u8) !TestRun {
+        var testRun: TestRun = .{
+            .output = std.ArrayList(u8).init(testing.allocator),
+            .options = try Options.init(testing.allocator),
+            .expected = expected,
+        };
+        try testRun.options.inputFiles.append(file1);
+        try testRun.options.inputFiles.append(file2);
+        return testRun;
+    }
+
+    fn writer(self: *TestRun) !std.io.AnyWriter {
+        return self.output.writer().any();
+    }
+
+    fn runLineDiff(self: *TestRun) !void {
+        try lineDiff(&self.options, self.output.writer().any(), testing.allocator);
+        try testing.expectEqualStrings(self.expected, self.output.items);
+    }
+
+    fn deinit(self: *TestRun) void {
+        self.output.deinit();
+        self.options.deinit();
+    }
+};
+
+test "line diff with equal files" {
+    var testRun = try TestRun.init("./src/test/people.csv", "./src/test/people.csv", NO_DIFF);
+    defer testRun.deinit();
+    try testRun.runLineDiff();
+}
+
+test "line diff with more lines" {
+    var testRun = try TestRun.init("./src/test/people.csv", "./src/test/morePeople.csv", @embedFile("test/expect_lineDiff_people_vs_morePeople"));
+    defer testRun.deinit();
+    try testRun.runLineDiff();
+}
+
+test "line diff with less lines" {
+    var testRun = try TestRun.init("./src/test/people.csv", "./src/test/lessPeople.csv", @embedFile("test/expect_lineDiff_people_vs_lessPeople"));
+    defer testRun.deinit();
+    try testRun.runLineDiff();
+}
+
+test "line diff with equal duplicate lines" {
+    var testRun = try TestRun.init("./src/test/duplicatePeople.csv", "./src/test/duplicatePeople.csv", NO_DIFF);
+    defer testRun.deinit();
+    try testRun.runLineDiff();
+}
+
+test "line diff with added/removeed/changed lines" {
+    var testRun = try TestRun.init("./src/test/people.csv", "./src/test/differentPeople.csv", @embedFile("test/expect_lineDiff_people_vs_differentPeople"));
+    defer testRun.deinit();
+    try testRun.runLineDiff();
 }
 
 test {
