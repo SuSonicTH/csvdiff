@@ -77,7 +77,7 @@ fn doDiff(options: *Options, allocator: std.mem.Allocator) !void {
     } else if (options.keyFields == null) {
         try lineDiff(options, writer, allocator);
     } else {
-        try uniqueDiff(options, writer, allocator);
+        try keyDiff(options, writer, allocator);
     }
 }
 
@@ -139,7 +139,7 @@ fn lineDiff(options: *Options, writer: std.io.AnyWriter, allocator: std.mem.Allo
     }
 }
 
-fn uniqueDiff(options: *Options, writer: std.io.AnyWriter, allocator: std.mem.Allocator) !void {
+fn keyDiff(options: *Options, writer: std.io.AnyWriter, allocator: std.mem.Allocator) !void {
     var fileA = try FileReader.init(options.inputFiles.items[0]);
     defer fileA.deinit();
 
@@ -177,13 +177,13 @@ fn uniqueDiff(options: *Options, writer: std.io.AnyWriter, allocator: std.mem.Al
     if (options.fieldDiff) {
         var csvLineB = try CsvLine.init(allocator, .{ .separator = options.inputSeparator[0], .trim = options.trim, .quoute = if (options.inputQuoute) |quote| quote[0] else null });
         defer csvLineB.deinit();
-        try uniqueDiffPerField(&fileB, &fieldSet, writer, options, &csvLine, &csvLineB);
+        try keyDiffPerField(&fileB, &fieldSet, writer, options, &csvLine, &csvLineB);
     } else {
-        try uniqueDiffPerLine(&fileB, &fieldSet, writer, options);
+        try keyDiffPerLine(&fileB, &fieldSet, writer, options);
     }
 }
 
-fn uniqueDiffPerLine(fileB: *FileReader, fieldSet: *FieldSet, writer: std.io.AnyWriter, options: *Options) !void {
+fn keyDiffPerLine(fileB: *FileReader, fieldSet: *FieldSet, writer: std.io.AnyWriter, options: *Options) !void {
     const color = options.getColors();
     while (try fileB.getLine()) |line| {
         if (try fieldSet.get(line)) |entry| {
@@ -210,7 +210,7 @@ fn uniqueDiffPerLine(fileB: *FileReader, fieldSet: *FieldSet, writer: std.io.Any
     }
 }
 
-fn uniqueDiffPerField(fileB: *FileReader, fieldSet: *FieldSet, writer: std.io.AnyWriter, options: *Options, csvLineA: *CsvLine, csvLineB: *CsvLine) !void {
+fn keyDiffPerField(fileB: *FileReader, fieldSet: *FieldSet, writer: std.io.AnyWriter, options: *Options, csvLineA: *CsvLine, csvLineB: *CsvLine) !void {
     const color = options.getColors();
     while (try fileB.getLine()) |line| {
         if (try fieldSet.get(line)) |entry| {
@@ -269,14 +269,14 @@ const TestRun = struct {
     options: Options,
     expected: []const u8,
 
-    fn init(file1: []const u8, file2: []const u8, comptime expected: []const u8) !TestRun {
+    fn init(comptime file1: []const u8, comptime file2: []const u8, comptime expected: []const u8) !TestRun {
         var testRun: TestRun = .{
             .output = std.ArrayList(u8).init(testing.allocator),
             .options = try Options.init(testing.allocator),
-            .expected = expected,
+            .expected = @embedFile("test/" ++ expected),
         };
-        try testRun.options.inputFiles.append(file1);
-        try testRun.options.inputFiles.append(file2);
+        try testRun.options.inputFiles.append("./src/test/" ++ file1);
+        try testRun.options.inputFiles.append("./src/test/" ++ file2);
         return testRun;
     }
 
@@ -287,6 +287,13 @@ const TestRun = struct {
     fn runLineDiff(self: *TestRun) !void {
         try lineDiff(&self.options, self.output.writer().any(), testing.allocator);
         try testing.expectEqualStrings(self.expected, self.output.items);
+        self.deinit();
+    }
+
+    fn runKeyDiff(self: *TestRun) !void {
+        try keyDiff(&self.options, self.output.writer().any(), testing.allocator);
+        try testing.expectEqualStrings(self.expected, self.output.items);
+        self.deinit();
     }
 
     fn deinit(self: *TestRun) void {
@@ -295,34 +302,71 @@ const TestRun = struct {
     }
 };
 
-test "line diff with equal files" {
-    var testRun = try TestRun.init("./src/test/people.csv", "./src/test/people.csv", NO_DIFF);
-    defer testRun.deinit();
+test "lineDiff with equal files" {
+    var testRun = try TestRun.init("people.csv", "people.csv", "empty");
     try testRun.runLineDiff();
 }
 
-test "line diff with more lines" {
-    var testRun = try TestRun.init("./src/test/people.csv", "./src/test/morePeople.csv", @embedFile("test/expect_lineDiff_people_vs_morePeople"));
-    defer testRun.deinit();
+test "lineDiff with more lines" {
+    var testRun = try TestRun.init("people.csv", "morePeople.csv", "expect_diff_people_vs_morePeople");
     try testRun.runLineDiff();
 }
 
-test "line diff with less lines" {
-    var testRun = try TestRun.init("./src/test/people.csv", "./src/test/lessPeople.csv", @embedFile("test/expect_lineDiff_people_vs_lessPeople"));
-    defer testRun.deinit();
+test "lineDiff with less lines" {
+    var testRun = try TestRun.init("people.csv", "lessPeople.csv", "expect_diff_people_vs_lessPeople");
     try testRun.runLineDiff();
 }
 
-test "line diff with equal duplicate lines" {
-    var testRun = try TestRun.init("./src/test/duplicatePeople.csv", "./src/test/duplicatePeople.csv", NO_DIFF);
-    defer testRun.deinit();
+test "lineDiff with equal duplicate lines" {
+    var testRun = try TestRun.init("duplicatePeople.csv", "duplicatePeople.csv", "empty");
     try testRun.runLineDiff();
 }
 
-test "line diff with added/removeed/changed lines" {
-    var testRun = try TestRun.init("./src/test/people.csv", "./src/test/differentPeople.csv", @embedFile("test/expect_lineDiff_people_vs_differentPeople"));
-    defer testRun.deinit();
+test "lineDiff with added/removeed/changed lines" {
+    var testRun = try TestRun.init("people.csv", "differentPeople.csv", "expect_lineDiff_people_vs_differentPeople");
     try testRun.runLineDiff();
+}
+
+test "keyDiff with equal files" {
+    var testRun = try TestRun.init("people.csv", "people.csv", "empty");
+    try testRun.options.addKey("1");
+    try testRun.runKeyDiff();
+}
+
+test "keyDiff with more lines" {
+    var testRun = try TestRun.init("people.csv", "morePeople.csv", "expect_diff_people_vs_morePeople");
+    try testRun.options.addKey("1");
+    try testRun.runKeyDiff();
+}
+
+test "keyDiff with less lines" {
+    var testRun = try TestRun.init("people.csv", "lessPeople.csv", "expect_diff_people_vs_lessPeople");
+    try testRun.options.addKey("1");
+    try testRun.runKeyDiff();
+}
+
+test "keyDiff with equal duplicate lines" {
+    var testRun = try TestRun.init("duplicatePeople.csv", "duplicatePeople.csv", "empty");
+    try testRun.options.addKey("1");
+    try testRun.runKeyDiff();
+}
+
+test "keyDiff with added/removeed/changed lines with index key" {
+    var testRun = try TestRun.init("people.csv", "differentPeople.csv", "expect_keyDiff_people_vs_differentPeople");
+    try testRun.options.addKey("1");
+    try testRun.runKeyDiff();
+}
+
+test "keyDiff with added/removeed/changed lines with named key" {
+    var testRun = try TestRun.init("people.csv", "differentPeople.csv", "expect_keyDiff_people_vs_differentPeople");
+    try testRun.options.addKey("Customer Id");
+    try testRun.runKeyDiff();
+}
+
+test "keyDiff with added/removeed/changed lines with 2 named keys" {
+    var testRun = try TestRun.init("people.csv", "differentPeople.csv", "expect_keyDiff_people_vs_differentPeople_2_keys");
+    try testRun.options.addKey("Customer Id,Last Name");
+    try testRun.runKeyDiff();
 }
 
 test {
