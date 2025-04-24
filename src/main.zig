@@ -285,15 +285,15 @@ const TestRun = struct {
     }
 
     fn runLineDiff(self: *TestRun) !void {
+        defer self.deinit();
         try lineDiff(&self.options, self.output.writer().any(), testing.allocator);
         try testing.expectEqualStrings(self.expected, self.output.items);
-        self.deinit();
     }
 
     fn runKeyDiff(self: *TestRun) !void {
+        defer self.deinit();
         try keyDiff(&self.options, self.output.writer().any(), testing.allocator);
         try testing.expectEqualStrings(self.expected, self.output.items);
-        self.deinit();
     }
 
     fn deinit(self: *TestRun) void {
@@ -327,6 +327,12 @@ test "lineDiff with added/removeed/changed lines" {
     try testRun.runLineDiff();
 }
 
+test "lineDiff with added/removeed/changed lines asCsv" {
+    var testRun = try TestRun.init("people.csv", "differentPeople.csv", "expect_lineDiff_people_vs_differentPeople_asCsv");
+    testRun.options.setAsCsv(true);
+    try testRun.runLineDiff();
+}
+
 test "keyDiff with equal files" {
     var testRun = try TestRun.init("people.csv", "people.csv", "empty");
     try testRun.options.addKey("1");
@@ -357,6 +363,13 @@ test "keyDiff with added/removeed/changed lines with index key" {
     try testRun.runKeyDiff();
 }
 
+test "keyDiff with added/removeed/changed lines asCsv" {
+    var testRun = try TestRun.init("people.csv", "differentPeople.csv", "expect_keyDiff_people_vs_differentPeople_asCsv");
+    try testRun.options.addKey("1");
+    testRun.options.setAsCsv(true);
+    try testRun.runKeyDiff();
+}
+
 test "keyDiff with added/removeed/changed lines with named key" {
     var testRun = try TestRun.init("people.csv", "differentPeople.csv", "expect_keyDiff_people_vs_differentPeople");
     try testRun.options.addKey("Customer Id");
@@ -366,6 +379,13 @@ test "keyDiff with added/removeed/changed lines with named key" {
 test "keyDiff with added/removeed/changed lines with 2 named keys" {
     var testRun = try TestRun.init("people.csv", "differentPeople.csv", "expect_keyDiff_people_vs_differentPeople_2_keys");
     try testRun.options.addKey("Customer Id,Last Name");
+    try testRun.runKeyDiff();
+}
+
+test "keyDiff with added/removeed/changed lines fieldDiff" {
+    var testRun = try TestRun.init("people.csv", "differentPeople.csv", "expect_keyDiff_people_vs_differentPeople_fieldDiff");
+    try testRun.options.addKey("1");
+    testRun.options.fieldDiff = true;
     try testRun.runKeyDiff();
 }
 

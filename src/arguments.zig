@@ -102,7 +102,7 @@ pub const Parser = struct {
                         options.color = true;
                     },
                     .@"--asCsv" => {
-                        options.asCsv = true;
+                        options.setAsCsv(true);
                     },
                     .@"-f", .@"--fieldDiff" => {
                         options.fieldDiff = true;
@@ -167,6 +167,5 @@ pub const Parser = struct {
         if (options.inputFiles.items.len != 2 and !(options.inputFiles.items.len == 1 and options.listHeader == true)) {
             ExitCode.needTwoInputFiles.printErrorAndExit(.{options.inputFiles.items.len});
         }
-        options.setDiffSpacing();
     }
 };

@@ -22,6 +22,7 @@ const Colors = struct {
             return .{
                 .red = "",
                 .green = "",
+                .blue = "",
                 .reset = "",
             };
         }
@@ -85,7 +86,8 @@ pub const Options = struct {
         }
     }
 
-    pub fn setDiffSpacing(self: *Options) void {
+    pub fn setAsCsv(self: *Options, asCsv: bool) void {
+        self.asCsv = asCsv;
         if (self.asCsv) {
             self.diffSpaceing = self.inputSeparator[0];
         }
