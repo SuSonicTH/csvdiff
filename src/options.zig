@@ -56,6 +56,7 @@ pub const Options = struct {
     asCsv: bool = false,
     diffSpaceing: u8 = ' ',
     fieldDiff: bool = false,
+    outputAll: bool = false,
 
     pub fn init(allocator: std.mem.Allocator) !Options {
         return .{

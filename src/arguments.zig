@@ -27,10 +27,13 @@ const Argument = enum {
     @"--exitCodes",
     @"--config",
     @"--time",
+    @"-c",
     @"--color",
     @"--asCsv",
     @"-f",
     @"--fieldDiff",
+    @"-a",
+    @"--outputAll",
 };
 
 const Separator = enum {
@@ -98,7 +101,7 @@ pub const Parser = struct {
                     .@"--time" => {
                         options.time = true;
                     },
-                    .@"--color" => {
+                    .@"-c", .@"--color" => {
                         options.color = true;
                     },
                     .@"--asCsv" => {
@@ -106,6 +109,9 @@ pub const Parser = struct {
                     },
                     .@"-f", .@"--fieldDiff" => {
                         options.fieldDiff = true;
+                    },
+                    .@"-a", .@"--outputAll" => {
+                        options.outputAll = true;
                     },
                 }
             } else {

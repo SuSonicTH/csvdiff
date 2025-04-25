@@ -121,6 +121,9 @@ fn lineDiff(options: *Options, writer: std.io.AnyWriter, allocator: std.mem.Allo
     while (try fileB.getLine()) |line| {
         if (lineSet.get(line)) |entry| {
             if (entry.count > 0) {
+                if (options.outputAll) {
+                    _ = try writer.print(" {c}{s}\n", .{ options.diffSpaceing, line });
+                }
                 entry.count -= 1;
             } else {
                 _ = try writer.print("{s}+{c}{s}{s}\n", .{ color.green, options.diffSpaceing, line, color.reset });
@@ -191,6 +194,8 @@ fn keyDiffPerLine(fileB: *FileReader, fieldSet: *FieldSet, writer: std.io.AnyWri
                 if (!try fieldSet.valueMatches(entry, line)) {
                     _ = try writer.print("{s}<{c}{s}{s}\n", .{ color.red, options.diffSpaceing, entry.line.?, color.reset });
                     _ = try writer.print("{s}>{c}{s}{s}\n", .{ color.green, options.diffSpaceing, line, color.reset });
+                } else if (options.outputAll) {
+                    _ = try writer.print(" {c}{s}\n", .{ options.diffSpaceing, entry.line.? });
                 }
                 entry.count -= 1;
             } else {
@@ -241,6 +246,8 @@ fn keyDiffPerField(fileB: *FileReader, fieldSet: *FieldSet, writer: std.io.AnyWr
                         }
                     }
                     _ = try writer.print("\n", .{});
+                } else if (options.outputAll) {
+                    _ = try writer.print(" {c}{s}\n", .{ options.diffSpaceing, line });
                 }
                 entry.count -= 1;
             } else {
@@ -333,6 +340,12 @@ test "lineDiff with added/removeed/changed lines asCsv" {
     try testRun.runLineDiff();
 }
 
+test "lineDiff with added/removeed/changed lines output all lines" {
+    var testRun = try TestRun.init("people.csv", "differentPeople.csv", "expect_lineDiff_people_vs_differentPeople_all");
+    testRun.options.outputAll = true;
+    try testRun.runLineDiff();
+}
+
 test "keyDiff with equal files" {
     var testRun = try TestRun.init("people.csv", "people.csv", "empty");
     try testRun.options.addKey("1");
@@ -370,6 +383,13 @@ test "keyDiff with added/removeed/changed lines asCsv" {
     try testRun.runKeyDiff();
 }
 
+test "keyDiff with added/removeed/changed lines outputAll" {
+    var testRun = try TestRun.init("people.csv", "differentPeople.csv", "expect_keyDiff_people_vs_differentPeople_all");
+    try testRun.options.addKey("1");
+    testRun.options.outputAll = true;
+    try testRun.runKeyDiff();
+}
+
 test "keyDiff with added/removeed/changed lines with named key" {
     var testRun = try TestRun.init("people.csv", "differentPeople.csv", "expect_keyDiff_people_vs_differentPeople");
     try testRun.options.addKey("Customer Id");
@@ -386,6 +406,14 @@ test "keyDiff with added/removeed/changed lines fieldDiff" {
     var testRun = try TestRun.init("people.csv", "differentPeople.csv", "expect_keyDiff_people_vs_differentPeople_fieldDiff");
     try testRun.options.addKey("1");
     testRun.options.fieldDiff = true;
+    try testRun.runKeyDiff();
+}
+
+test "keyDiff with added/removeed/changed lines outputAll fieldDiff" {
+    var testRun = try TestRun.init("people.csv", "differentPeople.csv", "expect_keyDiff_people_vs_differentPeople_all_fieldDiff");
+    try testRun.options.addKey("1");
+    testRun.options.fieldDiff = true;
+    testRun.options.outputAll = true;
     try testRun.runKeyDiff();
 }
 

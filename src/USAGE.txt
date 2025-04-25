@@ -13,8 +13,9 @@ Options:
                               then in $HOME/.config/csvdiff
                               pauses argument processing an applies config
                               then continues to apply command line arguments
-         --color              output in read/green
+     -c, --color              output in read/green
          --asCsv              output in csv format
+     -a, --outputAll          output allso matching lines
          
   input:
      -s, --separator sep        use sep as input field separator
