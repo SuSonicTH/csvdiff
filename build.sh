@@ -57,11 +57,6 @@ if [ "$CLEAN" == "true" ]; then
     rm bin/* >/dev/null 2>&1
 fi
 
-if [ "$TESTS" == "true" ]; then
-    echo testing
-    zig test src/main.zig || exit_on_error
-fi
-
 NATIVE_SUFFIX=""
 if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]]; then
     NATIVE_SUFFIX=".exe"
@@ -110,6 +105,11 @@ function build_platform() {
 # build native
 echo
 build_platform "native" $NATIVE_SUFFIX
+
+if [ "$TESTS" == "true" ]; then
+    echo testing
+    zig test src/main.zig || exit_on_error
+fi
 
 # build all
 if [ "$ALL" = "true" ]; then
