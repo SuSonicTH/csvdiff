@@ -2,6 +2,8 @@
 
 a fast commandline diff tool for csv-files written in zig
 
+![csvdiff demo](media/csvdiff.gif)
+
 ## functionality
 
 It can either show the difference per line, order in the file does not matter and duplicate lines are also accounterd for, or you can specify key columns to match, which checks if the other columns are matching for matching keys. Colums can also be excluded from the check.
@@ -52,9 +54,9 @@ zig test src/main.zig
 ```
 
 ## Usage
-see [src/USAGE.txt](src/USAGE.txt)
+execute `csvdiff --help` to ouput the usage information or see [src/USAGE.txt](src/USAGE.txt)
 
 ## Licence
 csvcut is licensed under the MIT license
 
-see [LICENSE.txt](LICENSE.txt)
+execute `csvdiff --version` or check [LICENSE.txt](LICENSE.txt) to read it
