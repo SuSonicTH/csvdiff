@@ -1,6 +1,8 @@
 Output media/csvdiff.gif
 
 Hide
+Type "PS1='\[\e[96m\]\\$\[\e[0m\] '"
+Enter
 Type@1ms "./build.sh"
 Enter
 Type@1ms "cd ./bin"
@@ -12,7 +14,7 @@ Enter
 
 Type@1ms "clear"
 Enter
-Sleep 200ms
+Sleep 1s
 Show
 
 
