@@ -196,9 +196,12 @@ pub inline fn getSelectedFields(self: *Self, comptime fieldType: FieldType, line
 
     const fields = try self.csvLine.parse(line);
 
-    try joiner.add(fields[indices[0]]);
-    for (1..indices.len) |index| {
-        try joiner.add(fields[indices[index]]);
+    for (0..indices.len) |index| {
+        if (indices[index] >= fields.len) {
+            try joiner.add("");
+        } else {
+            try joiner.add(fields[indices[index]]);
+        }
     }
     return joiner.get();
 }

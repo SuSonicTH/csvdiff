@@ -1,0 +1,22 @@
++ Customer Id,First Name,Last Name
++ DD37Cf93aecA6Dc,Sheryl,Baxter
++ 1Ef7b82A4CAAD10,Preston,Lozano
++ 6F94879bDAfE5a6,Roy,Berry
++ 5Cef8BFA16c5e3c,Linda,Olsen
++ 053d585Ab6b3159,Joanna,Bender
++ 2d08FB17EE273F4,Aimee,Downs
++ EA4d384DfDbBf77,Darren,Peck
++ 0e04AFde9f225dE,Brett,Mullen
++ C2dE4dEEc489ae0,Sheryl,Meyers
++ 8C2811a503C7c5a,Michelle,Gallagher
+- 5Cef8BFA16c5e3c,Linda,Olsen,19,0
+- 0e04AFde9f225dE,Brett,Mullen,33,1
+- C2dE4dEEc489ae0,Sheryl,Meyers,49,0
+- 8C2811a503C7c5a,Michelle,Gallagher,16,0
+- 2d08FB17EE273F4,Aimee,Downs,44,0
+- Customer Id,First Name,Last Name,Age,Kids
+- 053d585Ab6b3159,Joanna,Bender,32,1
+- DD37Cf93aecA6Dc,Sheryl,Baxter,23,1
+- 1Ef7b82A4CAAD10,Preston,Lozano,26,1
+- 6F94879bDAfE5a6,Roy,Berry,54,3
+- EA4d384DfDbBf77,Darren,Peck,72,5

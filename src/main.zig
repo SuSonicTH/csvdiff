@@ -105,15 +105,16 @@ fn lineDiff(options: *Options, writer: std.io.AnyWriter, allocator: std.mem.Allo
 
     var lineSet = try LineSet.init(try fileA.getAproximateLineCount(100), allocator);
     defer lineSet.deinit();
-    while (try fileA.getLine()) |line| {
-        try lineSet.put(line);
-    }
 
     if (options.asCsv and options.fileHeader) {
-        if (try fileB.getLine()) |header| {
+        if (try fileA.getLine()) |header| {
             _ = try writer.print("DIFF{c}{s}\n", .{ options.diffSpaceing, header });
         }
-        fileB.reset();
+        _ = try fileB.getLine();
+    }
+
+    while (try fileA.getLine()) |line| {
+        try lineSet.put(line);
     }
 
     const color = options.getColors();
@@ -152,29 +153,32 @@ fn keyDiff(options: *Options, writer: std.io.AnyWriter, allocator: std.mem.Alloc
     var csvLine = try CsvLine.init(allocator, .{ .separator = options.inputSeparator[0], .trim = options.trim, .quoute = if (options.inputQuoute) |quote| quote[0] else null });
     defer csvLine.deinit();
 
-    if (options.fileHeader) {
-        if (try fileA.getLine()) |line| {
-            try options.setHeaderFields(try csvLine.parse(line));
+    if (try fileA.getLine()) |line| {
+        try options.setHeaderFields(try csvLine.parse(line));
+        if (options.asCsv and options.fileHeader) {
+            _ = try writer.print("DIFF{c}{s}\n", .{ options.diffSpaceing, line });
         }
     }
+    if (try fileB.getLine()) |line| {
+        const header = try csvLine.parse(line);
+        if (options.header.?.len != header.len) {
+            return error.differentHeaderLenghts;
+        }
+    }
+
     try options.calculateFieldIndices();
 
     var fieldSet = try FieldSet.init(try fileA.getAproximateLineCount(10000), options.keyIndices.?, options.valueIndices.?, csvLine, allocator);
     defer fieldSet.deinit();
 
-    if (options.fileHeader) {
-        _ = try fileA.getLine(); //skip header;
+    if (options.fileHeader and options.asCsv) {
+        _ = try fileA.getLine(); //skip header
+    } else {
+        fileB.reset();
     }
 
     while (try fileA.getLine()) |line| {
         try fieldSet.put(line);
-    }
-
-    if (options.fileHeader) {
-        const header = try fileB.getLine(); //skip header;
-        if (options.asCsv and header != null) {
-            _ = try writer.print("DIFF{c}{s}\n", .{ options.diffSpaceing, header.? });
-        }
     }
 
     if (options.fieldDiff) {
@@ -269,7 +273,6 @@ fn keyDiffPerField(fileB: *FileReader, fieldSet: *FieldSet, writer: std.io.AnyWr
 
 // Test
 const testing = std.testing;
-const NO_DIFF = "";
 
 const TestRun = struct {
     output: std.ArrayList(u8),
@@ -346,6 +349,16 @@ test "lineDiff with added/removeed/changed lines output all lines" {
     try testRun.runLineDiff();
 }
 
+test "lineDiff pople vs people with more columns" {
+    var testRun = try TestRun.init("people.csv", "peopleMoreColumns.csv", "expect_lineDiff_people_vs_people_with_more_columns");
+    try testRun.runLineDiff();
+}
+
+test "lineDiff people with more columns vs people" {
+    var testRun = try TestRun.init("peopleMoreColumns.csv", "people.csv", "expect_lineDiff_people_with_more_columns_vs_people");
+    try testRun.runLineDiff();
+}
+
 test "keyDiff with equal files" {
     var testRun = try TestRun.init("people.csv", "people.csv", "empty");
     try testRun.options.addKey("1");
@@ -396,6 +409,13 @@ test "keyDiff with added/removeed/changed lines with named key" {
     try testRun.runKeyDiff();
 }
 
+test "keyDiff with added/removeed/changed lines without header" {
+    var testRun = try TestRun.init("people.csv", "differentPeople.csv", "expect_keyDiff_people_vs_differentPeople");
+    try testRun.options.addKey("1");
+    testRun.options.fileHeader = false;
+    try testRun.runKeyDiff();
+}
+
 test "keyDiff with added/removeed/changed lines with 2 named keys" {
     var testRun = try TestRun.init("people.csv", "differentPeople.csv", "expect_keyDiff_people_vs_differentPeople_2_keys");
     try testRun.options.addKey("Customer Id,Last Name");
@@ -414,6 +434,27 @@ test "keyDiff with added/removeed/changed lines outputAll fieldDiff" {
     try testRun.options.addKey("1");
     testRun.options.fieldDiff = true;
     testRun.options.outputAll = true;
+    try testRun.runKeyDiff();
+}
+
+test "keyDiff pople vs people with more columns" {
+    var testRun = try TestRun.init("people.csv", "peopleMoreColumns.csv", "empty");
+    try testRun.options.addKey("1");
+    try testing.expectError(error.differentHeaderLenghts, testRun.runKeyDiff());
+}
+
+test "keyDiff people with more columns vs people" {
+    var testRun = try TestRun.init("peopleMoreColumns.csv", "people.csv", "empty");
+    try testRun.options.addKey("1");
+    try testing.expectError(error.differentHeaderLenghts, testRun.runKeyDiff());
+}
+
+test "keyDiff with no header and diff in 1st line" {
+    var testRun = try TestRun.init("people.csv", "peoplewithDifferentHeader.csv", "expect_keyDiff_people_vs_peoplewithDifferentHeader");
+    try testRun.options.addKey("1");
+    testRun.options.fieldDiff = true;
+    testRun.options.outputAll = true;
+    testRun.options.fileHeader = false;
     try testRun.runKeyDiff();
 }
 
