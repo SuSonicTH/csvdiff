@@ -106,11 +106,15 @@ fn lineDiff(options: *Options, writer: std.io.AnyWriter, allocator: std.mem.Allo
     var lineSet = try LineSet.init(try fileA.getAproximateLineCount(100), allocator);
     defer lineSet.deinit();
 
-    if (options.asCsv and options.fileHeader) {
-        if (try fileA.getLine()) |header| {
-            _ = try writer.print("DIFF{c}{s}\n", .{ options.diffSpaceing, header });
+    if (options.asCsv) {
+        if (options.header != null) {
+            try writeHeader(options, writer);
+        } else if (options.fileHeader) {
+            if (try fileA.getLine()) |header| {
+                _ = try writer.print("DIFF{c}{s}\n", .{ options.inputSeparator[0], header });
+            }
+            _ = try fileB.getLine();
         }
-        _ = try fileB.getLine();
     }
 
     while (try fileA.getLine()) |line| {
@@ -143,6 +147,14 @@ fn lineDiff(options: *Options, writer: std.io.AnyWriter, allocator: std.mem.Allo
     }
 }
 
+fn writeHeader(options: *Options, writer: std.io.AnyWriter) !void {
+    _ = try writer.print("DIFF", .{});
+    for (options.header.?) |field| {
+        _ = try writer.print("{c}{s}", .{ options.inputSeparator[0], field });
+    }
+    _ = try writer.print("\n", .{});
+}
+
 fn keyDiff(options: *Options, writer: std.io.AnyWriter, allocator: std.mem.Allocator) !void {
     var fileA = try FileReader.init(options.inputFiles.items[0]);
     defer fileA.deinit();
@@ -153,17 +165,20 @@ fn keyDiff(options: *Options, writer: std.io.AnyWriter, allocator: std.mem.Alloc
     var csvLine = try CsvLine.init(allocator, .{ .separator = options.inputSeparator[0], .trim = options.trim, .quoute = if (options.inputQuoute) |quote| quote[0] else null });
     defer csvLine.deinit();
 
-    if (try fileA.getLine()) |line| {
-        try options.setHeaderFields(try csvLine.parse(line));
-        if (options.asCsv and options.fileHeader) {
-            _ = try writer.print("DIFF{c}{s}\n", .{ options.diffSpaceing, line });
+    if (options.header == null) {
+        if (try fileA.getLine()) |line| {
+            try options.setHeaderFields(try csvLine.parse(line));
+        }
+        if (try fileB.getLine()) |line| {
+            const header = try csvLine.parse(line);
+            if (options.header.?.len != header.len) {
+                return error.differentHeaderLenghts;
+            }
         }
     }
-    if (try fileB.getLine()) |line| {
-        const header = try csvLine.parse(line);
-        if (options.header.?.len != header.len) {
-            return error.differentHeaderLenghts;
-        }
+
+    if (options.asCsv and options.header != null) {
+        try writeHeader(options, writer);
     }
 
     try options.calculateFieldIndices();
@@ -455,6 +470,16 @@ test "keyDiff with no header and diff in 1st line" {
     testRun.options.fieldDiff = true;
     testRun.options.outputAll = true;
     testRun.options.fileHeader = false;
+    try testRun.runKeyDiff();
+}
+
+test "keyDiff with given header csv output" {
+    var testRun = try TestRun.init("people.csv", "peoplewithDifferentHeader.csv", "expect_keyDiff_with_given_header_csv_output");
+    try testRun.options.addKey("A");
+    try testRun.options.setHeader("A,B,C");
+    testRun.options.fileHeader = false;
+    testRun.options.setAsCsv(true);
+    testRun.options.fieldDiff = true;
     try testRun.runKeyDiff();
 }
 

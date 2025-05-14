@@ -1,0 +1,3 @@
+DIFF,A,B,C
++,ID,FIRST_NAME,LAST_NAME
+-,Customer Id,First Name,Last Name
