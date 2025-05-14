@@ -8,15 +8,16 @@ a fast commandline diff tool for csv-files written in zig
 
 It can either show the difference per line, order in the file does not matter and duplicate lines are also accounterd for, or you can specify key columns to match, which checks if the other columns are matching for matching keys. Colums can also be excluded from the check.
 
-On default only missmatched lines are outputed with a +,-,<,> or ~ sign. The added and mismatched lines are outputed in the order of the 2nd file. All missing lines from the 1st file are outputed at the end without any order.
+On default only missmatched lines are outputed with a +,-,<,> or ~ sign. Matched lines can be outputted as well with --outputAll and they are prefixed with '='. The added and mismatched lines are outputed in the order of the 2nd file. All missing lines from the 1st file are outputed at the end without any order.
 
-| sign | meaning                                                                                    |
-| ---- | ------------------------------------------------------------------------------------------ |
-| -    | the line from the firs file is missing in the 2nd file, i.e. was removed from the 2nd file |
-| +    | the line is in the 2nd file but not in the 1st file, i.e. was added to the 2nd file        |
-| <    | the line from the 1st file was matched by key but the value columns are different          |
-| >    | the line from the 2nd file was matched by key but the value columns are different          |
-| ~    | in columnDiff mode when the key was matched but the value columns are difer                |
+| sign | meaning                                                                                     |
+| ---- | ------------------------------------------------------------------------------------------- |
+| =    | the lines are equal in first and 2nd file (only written with --outputAll)                   |
+| -    | the line from the first file is missing in the 2nd file, i.e. was removed from the 2nd file |
+| +    | the line is in the 2nd file but not in the 1st file, i.e. was added to the 2nd file         |
+| <    | the line from the 1st file was matched by key but the value columns are different           |
+| >    | the line from the 2nd file was matched by key but the value columns are different           |
+| ~    | in --columnDiff mode when the key was matched but the value columns are difer               |
 
 ## Build requirements
 To build csvdiff you just need the zig compiler, which can be downloaded from [https://ziglang.org/download/](https://ziglang.org/download/) 
