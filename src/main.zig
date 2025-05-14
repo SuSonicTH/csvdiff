@@ -236,7 +236,7 @@ fn keyDiffPerField(fileB: *FileReader, fieldSet: *FieldSet, writer: std.io.AnyWr
                             },
                             .VALUE => {
                                 if (std.mem.eql(u8, fieldA, fieldB)) {
-                                    _ = try writer.print("{s}{s}{s}", .{ color.blue, fieldA, color.reset });
+                                    _ = try writer.print("{s}", .{fieldA});
                                 } else {
                                     _ = try writer.print("{s}{s}|{s}{s}{s}", .{ color.red, fieldA, color.green, fieldB, color.reset });
                                 }
@@ -251,7 +251,7 @@ fn keyDiffPerField(fileB: *FileReader, fieldSet: *FieldSet, writer: std.io.AnyWr
                     }
                     _ = try writer.print("\n", .{});
                 } else if (options.outputAll) {
-                    _ = try writer.print(" {c}{s}\n", .{ options.diffSpaceing, line });
+                    _ = try writer.print("={c}{s}\n", .{ options.diffSpaceing, line });
                 }
                 entry.count -= 1;
             } else {
