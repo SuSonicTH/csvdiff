@@ -127,7 +127,7 @@ fn lineDiff(options: *Options, writer: std.io.AnyWriter, allocator: std.mem.Allo
         if (lineSet.get(line)) |entry| {
             if (entry.count > 0) {
                 if (options.outputAll) {
-                    _ = try writer.print(" {c}{s}\n", .{ options.diffSpaceing, line });
+                    _ = try writer.print("={c}{s}\n", .{ options.diffSpaceing, line });
                 }
                 entry.count -= 1;
             } else {
@@ -214,7 +214,7 @@ fn keyDiffPerLine(fileB: *FileReader, fieldSet: *FieldSet, writer: std.io.AnyWri
                     _ = try writer.print("{s}<{c}{s}{s}\n", .{ color.red, options.diffSpaceing, entry.line.?, color.reset });
                     _ = try writer.print("{s}>{c}{s}{s}\n", .{ color.green, options.diffSpaceing, line, color.reset });
                 } else if (options.outputAll) {
-                    _ = try writer.print(" {c}{s}\n", .{ options.diffSpaceing, entry.line.? });
+                    _ = try writer.print("={c}{s}\n", .{ options.diffSpaceing, entry.line.? });
                 }
                 entry.count -= 1;
             } else {
@@ -253,7 +253,7 @@ fn keyDiffPerField(fileB: *FileReader, fieldSet: *FieldSet, writer: std.io.AnyWr
                                 if (std.mem.eql(u8, fieldA, fieldB)) {
                                     _ = try writer.print("{s}", .{fieldA});
                                 } else {
-                                    _ = try writer.print("{s}{s}/{s}{s}{s}", .{ color.red, fieldA, color.green, fieldB, color.reset });
+                                    _ = try writer.print("{s}{s}{s}/{s}{s}{s}", .{ color.red, fieldA, color.reset, color.green, fieldB, color.reset });
                                 }
                             },
                             .EXCLUDED => {

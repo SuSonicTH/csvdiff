@@ -77,7 +77,7 @@ Sleep 4s
 Type@1ms "clear"
 Sleep 150ms
 Enter
-Type "# show diff of value columns inline separated by '|'"
+Type "# show diff of value columns inline separated by '/'"
 Enter
 Sleep 500ms
 
