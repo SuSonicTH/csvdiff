@@ -62,6 +62,13 @@ if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]]; then
     NATIVE_SUFFIX=".exe"
 fi
 
+ZIP_ARG=''
+case "$(uname -s)" in
+    MINGW*)     ZIP_ARG='a';;
+    MSYS_NT*)   ZIP_ARG='a';;
+    *)          ZIP_ARG=''
+esac
+
 function build_platform() {
     PLAT=$1
     SUFFIX=$2
@@ -94,10 +101,10 @@ function build_platform() {
         echo packaging $PLAT
         if [ "$SUFFIX" == ".exe" ]; then 
             cd zig-out/bin/
-            zip a ../../bin/csvdiff-${PLAT}.zip csvdiff.exe > /dev/null
+            zip $ZIP_ARG ../../bin/csvdiff-${PLAT}.zip csvdiff.exe > /dev/null
             cd ../../
         else 
-            tar -czf ./bin/csvdiff-${PLAT}.tgz -C zig-out/bin/ csvdiff
+            gzip -c zig-out/bin/csvdiff > ./bin/csvdiff-${PLAT}.gz
         fi
     fi
 }
