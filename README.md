@@ -4,7 +4,7 @@ a fast commandline diff tool for csv-files written in zig
 
 ![csvdiff demo](media/csvdiff.gif)
 
-## functionality
+## Functionality
 
 It can either show the difference per line, order in the file does not matter and duplicate lines are also accounterd for, or you can specify key columns to match, which checks if the other columns are matching for matching keys. Colums can also be excluded from the check.
 
