@@ -73,7 +73,7 @@ fn doDiff(options: *Options, allocator: std.mem.Allocator) !void {
     const writer = bufferedWriter.writer().any();
 
     if (options.listHeader) {
-        try listHeader(options, allocator);
+        try listHeader(options);
     } else if (options.keyFields == null) {
         try lineDiff(options, writer, allocator);
     } else {
@@ -81,18 +81,19 @@ fn doDiff(options: *Options, allocator: std.mem.Allocator) !void {
     }
 }
 
-fn listHeader(options: *Options, allocator: std.mem.Allocator) !void {
-    var csvLine = try CsvLine.init(allocator, .{ .separator = options.inputSeparator[0], .trim = options.trim, .quoute = if (options.inputQuoute) |quote| quote[0] else null });
-    defer csvLine.deinit();
-    var file = try FileReader.init(options.inputFiles.items[0]);
-    defer file.deinit();
+fn listHeader(options: *Options) !void {
+    if (options.header == null) {
+        var file = try FileReader.init(options.inputFiles.items[0]);
+        defer file.deinit();
+
+        if (try file.getLine()) |line| {
+            try options.setHeader(line);
+        }
+    }
 
     const writer = std.io.getStdOut().writer();
-    if (try file.getLine()) |line| {
-        const fields = try csvLine.parse(line);
-        for (fields, 1..) |field, i| {
-            _ = try writer.print("{d}: {s}\n", .{ i, field });
-        }
+    for (options.header.?, 1..) |field, i| {
+        _ = try writer.print("{d}: {s}\n", .{ i, field });
     }
 }
 
