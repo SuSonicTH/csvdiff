@@ -7,7 +7,8 @@ const Self = @This();
 file: std.fs.File,
 memMapper: MemMapper,
 data: []const u8,
-pos: usize,
+pos: usize = 0,
+lines: usize = 0,
 
 pub fn init(fileName: []const u8) !Self {
     var file = std.fs.cwd().openFile(fileName, .{}) catch |err| ExitCode.couldNotOpenInputFile.printErrorAndExit(.{ fileName, err });
@@ -19,7 +20,6 @@ pub fn init(fileName: []const u8) !Self {
         .file = file,
         .memMapper = memMapper,
         .data = try memMapper.map(u8, .{}),
-        .pos = 0,
     };
 }
 
@@ -33,6 +33,8 @@ pub fn getLine(self: *Self) !?[]const u8 {
     if (self.pos >= self.data.len) {
         return null;
     }
+    self.lines += 1;
+
     const start = self.pos;
     while (self.pos < self.data.len and self.data[self.pos] != '\r' and self.data[self.pos] != '\n') {
         self.pos += 1;

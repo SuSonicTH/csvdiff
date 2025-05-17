@@ -57,6 +57,7 @@ pub const Options = struct {
     diffSpaceing: u8 = ' ',
     fieldDiff: bool = false,
     outputAll: bool = false,
+    stats: bool = false,
 
     pub fn init(allocator: std.mem.Allocator) !Options {
         return .{

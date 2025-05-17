@@ -16,7 +16,10 @@ Options:
      -c, --color              output in read/green
          --asCsv              output in csv format
      -a, --outputAll          output allso matching lines
-         
+     -f, --fieldDiff          output differences per field
+         --stats              output statistics at the end
+     -t, --time               output the time needed
+
   input:
      -s, --separator sep        use sep as input field separator
          sep can be one of:

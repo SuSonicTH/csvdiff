@@ -48,9 +48,14 @@ fn _main(allocator: std.mem.Allocator) !void {
 
     try doDiff(&options, allocator);
 
+    const stderr = std.io.getStdOut().writer();
+
+    if (options.stats) {
+        try stats.print(options.inputFiles, stderr);
+    }
+
     if (options.time) {
         const timeNeeded = @as(f32, @floatFromInt(timer.lap())) / 1000000.0;
-        const stderr = std.io.getStdOut().writer();
         if (timeNeeded > 1000) {
             _ = try stderr.print("time needed: {d:0.2}s\n", .{timeNeeded / 1000.0});
         } else {
@@ -58,6 +63,36 @@ fn _main(allocator: std.mem.Allocator) !void {
         }
     }
 }
+
+var stats: Stats = Stats.init();
+
+const Stats = struct {
+    linesA: usize = 0,
+    linesB: usize = 0,
+    equal: usize = 0,
+    added: usize = 0,
+    removed: usize = 0,
+    changed: usize = 0,
+
+    fn init() Stats {
+        return .{};
+    }
+
+    fn print(self: Stats, inputFiles: std.ArrayList([]const u8), writer: std.io.AnyWriter) !void {
+        _ = try writer.print("\n", .{});
+        _ = try writer.print("[Stats]\n", .{});
+        _ = try writer.print("fileA: {s}\n", .{inputFiles.items[0]});
+        _ = try writer.print("fileB: {s}\n", .{inputFiles.items[1]});
+        _ = try writer.print("\n", .{});
+        _ = try writer.print("linesA:  {d: >13}\n", .{self.linesA});
+        _ = try writer.print("linesB:  {d: >13}\n", .{self.linesA});
+        _ = try writer.print("\n", .{});
+        _ = try writer.print("equal:   {d: >13}\n", .{self.equal});
+        _ = try writer.print("added:   {d: >13}\n", .{self.added});
+        _ = try writer.print("removed: {d: >13}\n", .{self.removed});
+        _ = try writer.print("changed: {d: >13}\n", .{self.changed});
+    }
+};
 
 fn castArgs(args: [][:0]u8, allocator: std.mem.Allocator) ![][]const u8 {
     var ret = try allocator.alloc([]const u8, args.len);
@@ -120,6 +155,7 @@ fn lineDiff(options: *Options, writer: std.io.AnyWriter, allocator: std.mem.Allo
     while (try fileA.getLine()) |line| {
         try lineSet.put(line);
     }
+    stats.linesA = fileA.lines;
 
     const color = options.getColors();
 
@@ -130,18 +166,23 @@ fn lineDiff(options: *Options, writer: std.io.AnyWriter, allocator: std.mem.Allo
                     _ = try writer.print("={c}{s}\n", .{ options.diffSpaceing, line });
                 }
                 entry.count -= 1;
+                stats.equal += 1;
             } else {
                 _ = try writer.print("{s}+{c}{s}{s}\n", .{ color.green, options.diffSpaceing, line, color.reset });
+                stats.added += 1;
             }
         } else {
             _ = try writer.print("{s}+{c}{s}{s}\n", .{ color.green, options.diffSpaceing, line, color.reset });
+            stats.added += 1;
         }
     }
+    stats.linesB = fileB.lines;
 
     for (lineSet.data) |entry| {
         if (entry.line != null and entry.count > 0) {
             for (0..entry.count) |_| {
                 _ = try writer.print("{s}-{c}{s}{s}\n", .{ color.red, options.diffSpaceing, entry.line.?, color.reset });
+                stats.removed += 1;
             }
         }
     }
@@ -195,6 +236,7 @@ fn keyDiff(options: *Options, writer: std.io.AnyWriter, allocator: std.mem.Alloc
     while (try fileA.getLine()) |line| {
         try fieldSet.put(line);
     }
+    stats.linesA = fileA.lines;
 
     if (options.fieldDiff) {
         var csvLineB = try CsvLine.init(allocator, .{ .separator = options.inputSeparator[0], .trim = options.trim, .quoute = if (options.inputQuoute) |quote| quote[0] else null });
@@ -213,22 +255,30 @@ fn keyDiffPerLine(fileB: *FileReader, fieldSet: *FieldSet, writer: std.io.AnyWri
                 if (!try fieldSet.valueMatches(entry, line)) {
                     _ = try writer.print("{s}<{c}{s}{s}\n", .{ color.red, options.diffSpaceing, entry.line.?, color.reset });
                     _ = try writer.print("{s}>{c}{s}{s}\n", .{ color.green, options.diffSpaceing, line, color.reset });
-                } else if (options.outputAll) {
-                    _ = try writer.print("={c}{s}\n", .{ options.diffSpaceing, entry.line.? });
+                    stats.changed += 1;
+                } else {
+                    if (options.outputAll) {
+                        _ = try writer.print("={c}{s}\n", .{ options.diffSpaceing, entry.line.? });
+                    }
+                    stats.equal += 1;
                 }
                 entry.count -= 1;
             } else {
                 _ = try writer.print("{s}+{c}{s}{s}\n", .{ color.green, options.diffSpaceing, line, color.reset });
+                stats.added += 1;
             }
         } else {
             _ = try writer.print("{s}+{c}{s}{s}\n", .{ color.green, options.diffSpaceing, line, color.reset });
+            stats.added += 1;
         }
+        stats.linesB += 1;
     }
 
     for (fieldSet.data) |entry| {
         if (entry.line != null and entry.count > 0) {
             for (0..entry.count) |_| {
                 _ = try writer.print("{s}-{c}{s}{s}\n", .{ color.red, options.diffSpaceing, entry.line.?, color.green });
+                stats.removed += 1;
             }
         }
     }
@@ -265,22 +315,30 @@ fn keyDiffPerField(fileB: *FileReader, fieldSet: *FieldSet, writer: std.io.AnyWr
                         }
                     }
                     _ = try writer.print("\n", .{});
-                } else if (options.outputAll) {
-                    _ = try writer.print("={c}{s}\n", .{ options.diffSpaceing, line });
+                    stats.changed += 1;
+                } else {
+                    if (options.outputAll) {
+                        _ = try writer.print("={c}{s}\n", .{ options.diffSpaceing, line });
+                    }
+                    stats.equal += 1;
                 }
                 entry.count -= 1;
             } else {
                 _ = try writer.print("{s}+{c}{s}{s}\n", .{ color.green, options.diffSpaceing, line, color.reset });
+                stats.added += 1;
             }
         } else {
             _ = try writer.print("{s}+{c}{s}{s}\n", .{ color.green, options.diffSpaceing, line, color.reset });
+            stats.added += 1;
         }
     }
+    stats.linesB += 1;
 
     for (fieldSet.data) |entry| {
         if (entry.line != null and entry.count > 0) {
             for (0..entry.count) |_| {
                 _ = try writer.print("{s}-{c}{s}{s}\n", .{ color.red, options.diffSpaceing, entry.line.?, color.reset });
+                stats.removed += 1;
             }
         }
     }

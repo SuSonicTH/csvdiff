@@ -27,6 +27,7 @@ const Argument = enum {
     @"--exitCodes",
     @"--config",
     @"--time",
+    @"--stats",
     @"-c",
     @"--color",
     @"--asCsv",
@@ -100,6 +101,9 @@ pub const Parser = struct {
                     },
                     .@"--time" => {
                         options.time = true;
+                    },
+                    .@"--stats" => {
+                        options.stats = true;
                     },
                     .@"-c", .@"--color" => {
                         options.color = true;
