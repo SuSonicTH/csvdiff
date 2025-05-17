@@ -174,7 +174,7 @@ pub const Parser = struct {
     }
 
     pub fn validateArguments(options: *Options) !void {
-        if (options.inputFiles.items.len != 2 and !(options.inputFiles.items.len == 1 and options.listHeader == true)) {
+        if (options.inputFiles.items.len != 2 and !(options.inputFiles.items.len == 1 and options.listHeader == true) and !(options.header != null and options.listHeader == true)) {
             ExitCode.needTwoInputFiles.printErrorAndExit(.{options.inputFiles.items.len});
         }
     }
