@@ -48,7 +48,7 @@ fn _main(allocator: std.mem.Allocator) !void {
 
     try doDiff(&options, allocator);
 
-    const stderr = std.io.getStdOut().writer();
+    const stderr = std.io.getStdOut().writer().any();
 
     if (options.stats) {
         try stats.print(options.inputFiles, stderr);
