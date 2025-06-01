@@ -117,18 +117,24 @@ fn doDiff(options: *Options, allocator: std.mem.Allocator) !void {
 }
 
 fn listHeader(options: *Options) !void {
-    if (options.header == null) {
+    if (options.header) |header| {
+        try printHeader(header);
+    } else {
         var file = try FileReader.init(options.inputFiles.items[0]);
         defer file.deinit();
 
         if (try file.getLine()) |line| {
             try options.setHeader(line);
+            try printHeader(options.header.?);
         }
     }
+}
 
-    const writer = std.io.getStdOut().writer();
-    for (options.header.?, 1..) |field, i| {
-        _ = try writer.print("{d}: {s}\n", .{ i, field });
+fn printHeader(header: [][]const u8) !void {
+    const out = std.io.getStdOut();
+    for (header) |field| {
+        _ = try out.write(field);
+        _ = try out.write("\n");
     }
 }
 
