@@ -9,7 +9,7 @@ const State = enum {
     searchDoubleQuote,
 };
 
-pub fn readConfigFromFile(name: []const u8, allocator: std.mem.Allocator) !std.ArrayList([]const u8) {
+pub fn readConfigFromFile(name: []const u8, allocator: std.mem.Allocator) !std.array_list.Managed([]const u8) {
     const file = std.fs.cwd().openFile(name, .{}) catch blk: {
         if (name[0] == '/' or name[0] == '\\') {
             return error.FileNotFound;
@@ -21,7 +21,7 @@ pub fn readConfigFromFile(name: []const u8, allocator: std.mem.Allocator) !std.A
 
     var config = try file.readToEndAlloc(allocator, 1024 * 1024);
 
-    var arguments = try std.ArrayList([]const u8).initCapacity(allocator, 10);
+    var arguments = try std.array_list.Managed([]const u8).initCapacity(allocator, 10);
     try arguments.append(name);
 
     var pos: usize = 0;
@@ -186,7 +186,7 @@ fn getConfigFileFromHome(name: []const u8, allocator: std.mem.Allocator) !std.fs
 }
 
 fn openConfigFile(home: []const u8, sub1: []const u8, sub2: []const u8, name: []const u8, allocator: std.mem.Allocator) !std.fs.File {
-    var path = try std.ArrayList(u8).initCapacity(allocator, home.len + sub1.len + sub2.len + name.len + 3);
+    var path = try std.array_list.Managed(u8).initCapacity(allocator, home.len + sub1.len + sub2.len + name.len + 3);
     defer path.deinit();
 
     try path.appendSlice(home);

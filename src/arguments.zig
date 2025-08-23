@@ -163,13 +163,21 @@ pub const Parser = struct {
 
     fn printUsage() !void {
         const help = @embedFile("./USAGE.txt");
-        try std.io.getStdOut().writeAll(version ++ "\n" ++ help);
+        var stdout_buffer: [1024]u8 = undefined;
+        var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+        var stdout = &stdout_writer.interface;
+        try stdout.writeAll(version ++ "\n" ++ help);
+        try stdout.flush();
         try ExitCode.OK.exit();
     }
 
     fn printVersion() !void {
         const license = @embedFile("./LICENSE.txt");
-        try std.io.getStdOut().writeAll(version ++ "\n\n" ++ license);
+        var stdout_buffer: [1024]u8 = undefined;
+        var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+        var stdout = &stdout_writer.interface;
+        try stdout.writeAll(version ++ "\n\n" ++ license);
+        try stdout.flush();
         try ExitCode.exit(.OK);
     }
 

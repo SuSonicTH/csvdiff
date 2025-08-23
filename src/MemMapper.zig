@@ -31,7 +31,7 @@ pub fn deinit(self: *Self) void {
 }
 
 pub fn map(self: *Self, comptime T: type, options: Options) ![]T {
-    const len = if (options.size != 0) options.size else (try self.file.metadata()).size();
+    const len = if (options.size != 0) options.size else (try self.file.stat()).size;
 
     if (builtin.os.tag == .windows) {
         var access: windows.DWORD = 0;

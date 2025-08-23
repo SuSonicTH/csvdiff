@@ -32,8 +32,8 @@ pub const ExitCode = enum(u8) {
             .argumentValueMissingError => return "value for argument '{s}' is missing",
             .includeAndExcludeTogether => return "--include and --exclude cannot be used together",
 
-            .couldNotOpenInputFile => return "could not open input file '{s}' reason: {!}",
-            .couldNotOpenOutputFile => return "could not open output file '{s}' reason: {!}",
+            .couldNotOpenInputFile => return "could not open input file '{s}' reason: {}",
+            .couldNotOpenOutputFile => return "could not open output file '{s}' reason: {}",
             .outOfMemory => return "could not allocate more memory",
             .genericError => return "unhandled error '{any}'",
         }
@@ -44,20 +44,26 @@ pub const ExitCode = enum(u8) {
     }
 
     pub fn printExitCodes() !void {
-        const writer = std.io.getStdOut().writer();
-        _ = try writer.print("{s}\n\nExit Codes:\n", .{version});
+        var stdout_buffer: [1024]u8 = undefined;
+        var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+        var stdout = &stdout_writer.interface;
+        _ = try stdout.print("{s}\n\nExit Codes:\n", .{version});
 
         inline for (std.meta.fields(ExitCode)) |exitCode| {
-            try writer.print("{d}: {s}\n", .{ exitCode.value, exitCode.name });
+            try stdout.print("{d}: {s}\n", .{ exitCode.value, exitCode.name });
         }
+        try stdout.flush();
         try ExitCode.OK.exit();
     }
 
     fn _printErrorAndExit(comptime self: ExitCode, values: anytype) !noreturn {
-        const writer = std.io.getStdErr().writer();
-        _ = try writer.print("{s}\n\nError #{d}: ", .{ version, self.code() });
-        _ = try writer.print(self.message(), values);
-        _ = try writer.write("\n");
+        var stdout_buffer: [1024]u8 = undefined;
+        var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+        var stdout = &stdout_writer.interface;
+        _ = try stdout.print("{s}\n\nError #{d}: ", .{ version, self.code() });
+        _ = try stdout.print(self.message(), values);
+        _ = try stdout.write("\n");
+        try stdout.flush();
         _ = try self.exit();
     }
 

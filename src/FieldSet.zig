@@ -76,7 +76,7 @@ pub fn deinit(self: *Self) void {
 
 pub inline fn put(self: *Self, line: []const u8) !void {
     const key = try self.getSelectedFields(.KEY, line);
-    const hash: u32 = @truncate(std.hash.RapidHash.hash(0, key));
+    const hash: u32 = @truncate(std.hash.CityHash32.hash(key));
     try self.putHash(line, hash, key, 1);
     if (self.load() > LoadFactor) {
         try self.resize();
@@ -85,7 +85,7 @@ pub inline fn put(self: *Self, line: []const u8) !void {
 
 pub fn get(self: *Self, line: []const u8) !?*SetEntry {
     const key = try self.getSelectedFields(.KEY, line);
-    const hash: u32 = @truncate(std.hash.RapidHash.hash(0, key));
+    const hash: u32 = @truncate(std.hash.CityHash32.hash(key));
     const index = hash & self.mask;
     const entry = &self.data[index];
     if (entry.line == null) {
@@ -117,7 +117,9 @@ fn putHash(self: *Self, line: []const u8, hash: u32, key: []const u8, count: u32
         self.count += 1;
     } else if (try self.keyMatches(entry, hash, key)) {
         if (!try self.valueMatches(entry, line)) {
-            _ = try std.io.getStdOut().writer().print("{s}\n{s}\n", .{ line, entry.line.? });
+            var stdout_buffer: [1024]u8 = undefined;
+            var stdout = std.fs.File.stdout().writer(&stdout_buffer).interface;
+            _ = try stdout.print("{s}\n{s}\n", .{ line, entry.line.? });
             return error.duplicateKeyDifferentValues1;
         }
         entry.count += 1;

@@ -56,11 +56,17 @@ fn _main(allocator: std.mem.Allocator) !void {
 
     if (options.time) {
         const timeNeeded = @as(f32, @floatFromInt(timer.lap())) / 1000000.0;
+<<<<<<< HEAD
+=======
+        var stderr_buffer: [1024]u8 = undefined;
+        var stderr = std.fs.File.stderr().writer(&stderr_buffer).interface;
+>>>>>>> 141fca5 (updated to zig 0.15.1)
         if (timeNeeded > 1000) {
             _ = try stderr.print("time needed: {d:0.2}s\n", .{timeNeeded / 1000.0});
         } else {
             _ = try stderr.print("time needed: {d:0.2}ms\n", .{timeNeeded});
         }
+        try stderr.flush();
     }
 }
 
@@ -103,19 +109,25 @@ fn castArgs(args: [][:0]u8, allocator: std.mem.Allocator) ![][]const u8 {
 }
 
 fn doDiff(options: *Options, allocator: std.mem.Allocator) !void {
-    var bufferedWriter = std.io.bufferedWriter(std.io.getStdOut().writer());
-    defer bufferedWriter.flush() catch {};
-    const writer = bufferedWriter.writer().any();
+    var stdout_buffer: [1024]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    var stdout = &stdout_writer.interface;
 
     if (options.listHeader) {
+<<<<<<< HEAD
         try listHeader(options);
+=======
+        try listHeader(options, stdout, allocator);
+>>>>>>> 141fca5 (updated to zig 0.15.1)
     } else if (options.keyFields == null) {
-        try lineDiff(options, writer, allocator);
+        try lineDiff(options, stdout, allocator);
     } else {
-        try keyDiff(options, writer, allocator);
+        try keyDiff(options, stdout, allocator);
     }
+    try stdout.flush();
 }
 
+<<<<<<< HEAD
 fn listHeader(options: *Options) !void {
     if (options.header) |header| {
         try printHeader(header);
@@ -126,10 +138,23 @@ fn listHeader(options: *Options) !void {
         if (try file.getLine()) |line| {
             try options.setHeader(line);
             try printHeader(options.header.?);
+=======
+fn listHeader(options: *Options, writer: *std.Io.Writer, allocator: std.mem.Allocator) !void {
+    var csvLine = try CsvLine.init(allocator, .{ .separator = options.inputSeparator[0], .trim = options.trim, .quoute = if (options.inputQuoute) |quote| quote[0] else null });
+    defer csvLine.deinit();
+    var file = try FileReader.init(options.inputFiles.items[0]);
+    defer file.deinit();
+
+    if (try file.getLine()) |line| {
+        const fields = try csvLine.parse(line);
+        for (fields, 1..) |field, i| {
+            _ = try writer.print("{d}: {s}\n", .{ i, field });
+>>>>>>> 141fca5 (updated to zig 0.15.1)
         }
     }
 }
 
+<<<<<<< HEAD
 fn printHeader(header: [][]const u8) !void {
     const out = std.io.getStdOut();
     for (header) |field| {
@@ -139,6 +164,9 @@ fn printHeader(header: [][]const u8) !void {
 }
 
 fn lineDiff(options: *Options, writer: std.io.AnyWriter, allocator: std.mem.Allocator) !void {
+=======
+fn lineDiff(options: *Options, writer: *std.Io.Writer, allocator: std.mem.Allocator) !void {
+>>>>>>> 141fca5 (updated to zig 0.15.1)
     var fileA = try FileReader.init(options.inputFiles.items[0]);
     defer fileA.deinit();
 
@@ -195,7 +223,7 @@ fn lineDiff(options: *Options, writer: std.io.AnyWriter, allocator: std.mem.Allo
     }
 }
 
-fn writeHeader(options: *Options, writer: std.io.AnyWriter) !void {
+fn writeHeader(options: *Options, writer: *std.Io.Writer) !void {
     _ = try writer.print("DIFF", .{});
     for (options.header.?) |field| {
         _ = try writer.print("{c}{s}", .{ options.inputSeparator[0], field });
@@ -203,7 +231,7 @@ fn writeHeader(options: *Options, writer: std.io.AnyWriter) !void {
     _ = try writer.print("\n", .{});
 }
 
-fn keyDiff(options: *Options, writer: std.io.AnyWriter, allocator: std.mem.Allocator) !void {
+fn keyDiff(options: *Options, writer: *std.Io.Writer, allocator: std.mem.Allocator) !void {
     var fileA = try FileReader.init(options.inputFiles.items[0]);
     defer fileA.deinit();
 
@@ -254,7 +282,7 @@ fn keyDiff(options: *Options, writer: std.io.AnyWriter, allocator: std.mem.Alloc
     }
 }
 
-fn keyDiffPerLine(fileB: *FileReader, fieldSet: *FieldSet, writer: std.io.AnyWriter, options: *Options) !void {
+fn keyDiffPerLine(fileB: *FileReader, fieldSet: *FieldSet, writer: *std.Io.Writer, options: *Options) !void {
     const color = options.getColors();
     while (try fileB.getLine()) |line| {
         if (try fieldSet.get(line)) |entry| {
@@ -291,7 +319,7 @@ fn keyDiffPerLine(fileB: *FileReader, fieldSet: *FieldSet, writer: std.io.AnyWri
     }
 }
 
-fn keyDiffPerField(fileB: *FileReader, fieldSet: *FieldSet, writer: std.io.AnyWriter, options: *Options, csvLineA: *CsvLine, csvLineB: *CsvLine) !void {
+fn keyDiffPerField(fileB: *FileReader, fieldSet: *FieldSet, writer: *std.Io.Writer, options: *Options, csvLineA: *CsvLine, csvLineB: *CsvLine) !void {
     const color = options.getColors();
     while (try fileB.getLine()) |line| {
         if (try fieldSet.get(line)) |entry| {
@@ -355,13 +383,13 @@ fn keyDiffPerField(fileB: *FileReader, fieldSet: *FieldSet, writer: std.io.AnyWr
 const testing = std.testing;
 
 const TestRun = struct {
-    output: std.ArrayList(u8),
+    output: std.array_list.Managed(u8),
     options: Options,
     expected: []const u8,
 
     fn init(comptime file1: []const u8, comptime file2: []const u8, comptime expected: []const u8) !TestRun {
         var testRun: TestRun = .{
-            .output = std.ArrayList(u8).init(testing.allocator),
+            .output = std.array_list.Managed(u8).init(testing.allocator),
             .options = try Options.init(testing.allocator),
             .expected = @embedFile("test/" ++ expected),
         };
@@ -376,13 +404,21 @@ const TestRun = struct {
 
     fn runLineDiff(self: *TestRun) !void {
         defer self.deinit();
-        try lineDiff(&self.options, self.output.writer().any(), testing.allocator);
+        var buffer: [1024]u8 = undefined;
+        var adapter = self.output.writer().adaptToNewApi(&buffer);
+        const arrayWriter = &adapter.new_interface;
+        try lineDiff(&self.options, arrayWriter, testing.allocator);
+        try arrayWriter.flush();
         try testing.expectEqualStrings(self.expected, self.output.items);
     }
 
     fn runKeyDiff(self: *TestRun) !void {
         defer self.deinit();
-        try keyDiff(&self.options, self.output.writer().any(), testing.allocator);
+        var buffer: [1024]u8 = undefined;
+        var adapter = self.output.writer().adaptToNewApi(&buffer);
+        const arrayWriter = &adapter.new_interface;
+        try keyDiff(&self.options, arrayWriter, testing.allocator);
+        try arrayWriter.flush();
         try testing.expectEqualStrings(self.expected, self.output.items);
     }
 
@@ -403,7 +439,7 @@ test "lineDiff with more lines" {
 }
 
 test "lineDiff with less lines" {
-    var testRun = try TestRun.init("people.csv", "lessPeople.csv", "expect_diff_people_vs_lessPeople");
+    var testRun = try TestRun.init("people.csv", "lessPeople.csv", "expect_lineDiff_people_vs_lessPeople");
     try testRun.runLineDiff();
 }
 

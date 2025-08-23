@@ -50,7 +50,7 @@ pub const Options = struct {
     fieldTypes: ?[]FieldType = null,
     trim: bool = false,
     listHeader: bool = false,
-    inputFiles: std.ArrayList([]const u8),
+    inputFiles: std.array_list.Managed([]const u8),
     time: bool = false,
     color: bool = false,
     asCsv: bool = false,
@@ -62,7 +62,7 @@ pub const Options = struct {
     pub fn init(allocator: std.mem.Allocator) !Options {
         return .{
             .allocator = allocator,
-            .inputFiles = std.ArrayList([]const u8).init(allocator),
+            .inputFiles = std.array_list.Managed([]const u8).init(allocator),
         };
     }
 
@@ -190,13 +190,13 @@ pub const Options = struct {
 
 const SelectionList = struct {
     allocator: std.mem.Allocator,
-    list: std.ArrayList(Selection),
+    list: std.array_list.Managed(Selection),
     indices: ?[]usize = null,
 
     pub fn init(allocator: std.mem.Allocator) !SelectionList {
         return .{
             .allocator = allocator,
-            .list = std.ArrayList(Selection).init(allocator),
+            .list = std.array_list.Managed(Selection).init(allocator),
         };
     }
 
@@ -245,7 +245,7 @@ const SelectionList = struct {
         return minusPos;
     }
 
-    fn addRange(list: *std.ArrayList(Selection), field: []const u8, miusPos: usize) !void {
+    fn addRange(list: *std.array_list.Managed(Selection), field: []const u8, miusPos: usize) !void {
         if (toNumber(field[0..miusPos])) |from| {
             if (toNumber(field[miusPos + 1 ..])) |to| {
                 for (from..to + 1) |index| {
