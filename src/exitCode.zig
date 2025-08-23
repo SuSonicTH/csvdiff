@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const version = "csvdiff v0.1.3-beta";
+pub const version = "csvdiff v0.1.4-beta";
 
 pub const ExitCode = enum(u8) {
     OK,

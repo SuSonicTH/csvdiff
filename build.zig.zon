@@ -1,6 +1,6 @@
 .{
     .name = .csvdiff,
-    .version = "0.1.0",
+    .version = "0.1.4",
     .fingerprint = 0xb8227bb1d495a839,
 
     .dependencies = .{},
