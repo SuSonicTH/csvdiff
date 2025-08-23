@@ -48,7 +48,9 @@ fn _main(allocator: std.mem.Allocator) !void {
 
     try doDiff(&options, allocator);
 
-    const stderr = std.io.getStdOut().writer().any();
+    var stderr_buffer: [1024]u8 = undefined;
+    var stderr_writer = std.fs.File.stderr().writer(&stderr_buffer);
+    var stderr = &stderr_writer.interface;
 
     if (options.stats) {
         try stats.print(options.inputFiles, stderr);
@@ -56,18 +58,14 @@ fn _main(allocator: std.mem.Allocator) !void {
 
     if (options.time) {
         const timeNeeded = @as(f32, @floatFromInt(timer.lap())) / 1000000.0;
-<<<<<<< HEAD
-=======
-        var stderr_buffer: [1024]u8 = undefined;
-        var stderr = std.fs.File.stderr().writer(&stderr_buffer).interface;
->>>>>>> 141fca5 (updated to zig 0.15.1)
+
         if (timeNeeded > 1000) {
             _ = try stderr.print("time needed: {d:0.2}s\n", .{timeNeeded / 1000.0});
         } else {
             _ = try stderr.print("time needed: {d:0.2}ms\n", .{timeNeeded});
         }
-        try stderr.flush();
     }
+    try stderr.flush();
 }
 
 var stats: Stats = Stats.init();
@@ -84,7 +82,7 @@ const Stats = struct {
         return .{};
     }
 
-    fn print(self: Stats, inputFiles: std.ArrayList([]const u8), writer: std.io.AnyWriter) !void {
+    fn print(self: Stats, inputFiles: std.array_list.Managed([]const u8), writer: *std.Io.Writer) !void {
         _ = try writer.print("\n", .{});
         _ = try writer.print("[Stats]\n", .{});
         _ = try writer.print("fileA: {s}\n", .{inputFiles.items[0]});
@@ -114,11 +112,7 @@ fn doDiff(options: *Options, allocator: std.mem.Allocator) !void {
     var stdout = &stdout_writer.interface;
 
     if (options.listHeader) {
-<<<<<<< HEAD
-        try listHeader(options);
-=======
         try listHeader(options, stdout, allocator);
->>>>>>> 141fca5 (updated to zig 0.15.1)
     } else if (options.keyFields == null) {
         try lineDiff(options, stdout, allocator);
     } else {
@@ -127,18 +121,6 @@ fn doDiff(options: *Options, allocator: std.mem.Allocator) !void {
     try stdout.flush();
 }
 
-<<<<<<< HEAD
-fn listHeader(options: *Options) !void {
-    if (options.header) |header| {
-        try printHeader(header);
-    } else {
-        var file = try FileReader.init(options.inputFiles.items[0]);
-        defer file.deinit();
-
-        if (try file.getLine()) |line| {
-            try options.setHeader(line);
-            try printHeader(options.header.?);
-=======
 fn listHeader(options: *Options, writer: *std.Io.Writer, allocator: std.mem.Allocator) !void {
     var csvLine = try CsvLine.init(allocator, .{ .separator = options.inputSeparator[0], .trim = options.trim, .quoute = if (options.inputQuoute) |quote| quote[0] else null });
     defer csvLine.deinit();
@@ -149,12 +131,10 @@ fn listHeader(options: *Options, writer: *std.Io.Writer, allocator: std.mem.Allo
         const fields = try csvLine.parse(line);
         for (fields, 1..) |field, i| {
             _ = try writer.print("{d}: {s}\n", .{ i, field });
->>>>>>> 141fca5 (updated to zig 0.15.1)
         }
     }
 }
 
-<<<<<<< HEAD
 fn printHeader(header: [][]const u8) !void {
     const out = std.io.getStdOut();
     for (header) |field| {
@@ -163,10 +143,7 @@ fn printHeader(header: [][]const u8) !void {
     }
 }
 
-fn lineDiff(options: *Options, writer: std.io.AnyWriter, allocator: std.mem.Allocator) !void {
-=======
 fn lineDiff(options: *Options, writer: *std.Io.Writer, allocator: std.mem.Allocator) !void {
->>>>>>> 141fca5 (updated to zig 0.15.1)
     var fileA = try FileReader.init(options.inputFiles.items[0]);
     defer fileA.deinit();
 

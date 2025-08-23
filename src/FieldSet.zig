@@ -118,7 +118,8 @@ fn putHash(self: *Self, line: []const u8, hash: u32, key: []const u8, count: u32
     } else if (try self.keyMatches(entry, hash, key)) {
         if (!try self.valueMatches(entry, line)) {
             var stdout_buffer: [1024]u8 = undefined;
-            var stdout = std.fs.File.stdout().writer(&stdout_buffer).interface;
+            var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+            const stdout = &stdout_writer.interface;
             _ = try stdout.print("{s}\n{s}\n", .{ line, entry.line.? });
             return error.duplicateKeyDifferentValues1;
         }
