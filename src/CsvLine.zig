@@ -7,7 +7,7 @@ pub const Separator = struct {
     const pipe: u8 = '|';
 };
 
-pub const Quoute = struct {
+pub const Quote = struct {
     const single: u8 = '\'';
     const double: u8 = '"';
     const none: ?u8 = null;
@@ -15,13 +15,13 @@ pub const Quoute = struct {
 
 pub const Options = struct {
     separator: u8 = Separator.comma,
-    quoute: ?u8 = Quoute.none,
+    quote: ?u8 = Quote.none,
     fields: usize = 16,
     trim: bool = false,
 };
 
 pub const ParserError = error{
-    FoundEndOfLineAfterOpeningQuoute,
+    FoundEndOfLineAfterOpeningQuote,
     OutOfMemory,
 };
 
@@ -51,17 +51,20 @@ pub fn parse(self: *Self, line: []const u8) ParserError![][]const u8 {
     var last_was_separator: bool = false;
 
     while (!end_of_line(line, pos)) {
-        if (start_of_quouted_string(line, pos, self.options.quoute)) |quoute_pos| {
-            start = quoute_pos;
-            end = end_of_quoted_string(line, quoute_pos, self.options.quoute.?);
-            if (end_of_line(line, end)) return ParserError.FoundEndOfLineAfterOpeningQuoute;
-            pos = next_separator(line, end, self.options.separator) + 1;
+        if (start_of_quoted_string(line, pos, self.options.quote)) |quote_pos| {
+            start = quote_pos;
+            end = end_of_quoted_string(line, quote_pos, self.options.quote.?);
+            if (end_of_line(line, end)) return ParserError.FoundEndOfLineAfterOpeningQuote;
+
+            const separator_pos = next_separator(line, end, self.options.separator);
+            last_was_separator = separator_pos < line.len and line[separator_pos] == self.options.separator;
+            pos = separator_pos + 1;
         } else {
             start = pos;
             end = next_separator(line, pos, self.options.separator);
+            last_was_separator = end < line.len and line[end] == self.options.separator;
             pos = end + 1;
         }
-        last_was_separator = end < line.len and line[end] == self.options.separator;
         if (self.options.trim) {
             try self.add_field(std.mem.trim(u8, line[start..end], " \t"), index);
         } else {
@@ -79,25 +82,25 @@ pub fn parse(self: *Self, line: []const u8) ParserError![][]const u8 {
     return self.fields[0..index];
 }
 
-inline fn start_of_quouted_string(line: []const u8, start: usize, quoute: ?u8) ?usize {
-    if (quoute == null) {
-        return null;
-    }
+inline fn start_of_quoted_string(line: []const u8, start: usize, quote: ?u8) ?usize {
+    const quote_char = quote orelse return null;
     var pos = start;
     while (pos < line.len and line[pos] == ' ') {
         pos += 1;
     }
+    if (pos >= line.len) {
+        return null;
+    }
 
-    if (line[pos] == quoute.?) {
-        pos = pos + 1;
-        return pos;
+    if (line[pos] == quote_char) {
+        return pos + 1;
     }
     return null;
 }
 
-inline fn end_of_quoted_string(line: []const u8, start: usize, quoute: u8) usize {
+inline fn end_of_quoted_string(line: []const u8, start: usize, quote: u8) usize {
     var pos = start;
-    while (!end_of_line(line, pos) and line[pos] != quoute) {
+    while (pos < line.len and line[pos] != quote) {
         pos += 1;
     }
     return pos;
@@ -105,7 +108,8 @@ inline fn end_of_quoted_string(line: []const u8, start: usize, quoute: u8) usize
 
 inline fn add_field(self: *Self, field: []const u8, index: usize) !void {
     if (index >= self.fields.len) {
-        self.fields = try self.allocator.realloc(self.fields, self.fields.len * 2);
+        const new_len = if (self.fields.len == 0) 1 else self.fields.len * 2;
+        self.fields = try self.allocator.realloc(self.fields, new_len);
     }
     self.fields[index] = field;
 }
@@ -176,28 +180,41 @@ test "basic parsing with pipe separator" {
     try expectEqualStringsArray(&[_][]const u8{ "1", "2", "3" }, try csvLine.parse("1|2|3"));
 }
 
-test "basic quouted parsing" {
-    var csvLine = try init(testing.allocator, .{ .quoute = Quoute.single });
+test "basic quoted parsing" {
+    var csvLine = try init(testing.allocator, .{ .quote = Quote.single });
     defer csvLine.deinit();
     try expectEqualStringsArray(&[_][]const u8{ "1", "2", "3" }, try csvLine.parse("'1','2','3'"));
 }
 
-test "basic quouted parsing - spaces in fields" {
-    var csvLine = try init(testing.allocator, .{ .quoute = Quoute.single });
+test "basic quoted parsing - spaces in fields" {
+    var csvLine = try init(testing.allocator, .{ .quote = Quote.single });
     defer csvLine.deinit();
     try expectEqualStringsArray(&[_][]const u8{ " 1", "2 ", " 3 " }, try csvLine.parse("' 1','2 ',' 3 '"));
 }
 
-test "basic quouted parsing - spaces outside fields" {
-    var csvLine = try init(testing.allocator, .{ .quoute = Quoute.single });
+test "basic quoted parsing - spaces outside fields" {
+    var csvLine = try init(testing.allocator, .{ .quote = Quote.single });
     defer csvLine.deinit();
     try expectEqualStringsArray(&[_][]const u8{ "1", "2", "3" }, try csvLine.parse("   '1','2' , '3'    "));
 }
 
-test "quouted parsing - expect error for non closed quoute" {
-    var csvLine = try init(testing.allocator, .{ .quoute = Quoute.single });
+test "quoted parsing - expect error for non closed quote" {
+    var csvLine = try init(testing.allocator, .{ .quote = Quote.single });
     defer csvLine.deinit();
-    try testing.expectError(ParserError.FoundEndOfLineAfterOpeningQuoute, csvLine.parse("'1,2,3"));
+    try testing.expectError(ParserError.FoundEndOfLineAfterOpeningQuote, csvLine.parse("'1,2,3"));
+}
+
+test "quoted parsing - trailing empty field" {
+    var csvLine = try init(testing.allocator, .{ .quote = Quote.double });
+    defer csvLine.deinit();
+    try expectEqualStringsArray(&[_][]const u8{ "1", "a", "" }, try csvLine.parse("\"1\",\"a\","));
+    try expectEqualStringsArray(&[_][]const u8{ "1", "a", "x" }, try csvLine.parse("\"1\",\"a\",x"));
+}
+
+test "quoted parsing - field with only spaces at end of line" {
+    var csvLine = try init(testing.allocator, .{ .quote = Quote.single });
+    defer csvLine.deinit();
+    try expectEqualStringsArray(&[_][]const u8{ "a", "   " }, try csvLine.parse("a,   "));
 }
 
 test "whitespace trimming" {

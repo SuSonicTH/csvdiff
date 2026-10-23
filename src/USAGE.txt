@@ -13,37 +13,50 @@ Options:
                               then in $HOME/.config/csvdiff
                               pauses argument processing an applies config
                               then continues to apply command line arguments
-     -c, --color              output in read/green
+                              a file named default.config in the current
+                              directory is also applied automatically
+     -c, --color              output in red/green
          --asCsv              output in csv format
      -a, --outputAll          output allso matching lines
-     -f, --fieldDiff          output differences per field
+     -f, --fieldDiff          output differences per field (needs --key)
          --stats              output statistics at the end
      -t, --time               output the time needed
 
   input:
      -s, --separator sep        use sep as input field separator
          sep can be one of:
-            tab (\t)
+            tab (\t) {also accepts the literal two characters \t}
             comma (,) {Default}
             semicolon (;)
             pipe (|)
 
-     -q, --quote no             no quouting {default for performance}
-     -q, --quote single         use single quouttes (')
-     -q, --quote double         use double quoutes (")
+     -q, --quote no             no quoting {default for performance}
+     -q, --quote single         use single quotes (')
+     -q, --quote double         use double quotes (")
+         Escaped quotes inside quoted fields are not supported.
 
          --header [h1,h2,...]   use given heder (field1,field2,...)
      -n, --noHeader             file has no header
 
   processing:
      -k, --key [k1,k2,...]     fileds to use as primary key
-                               comma separated list of field names/indices 
+                               comma separated list of field names/indices
                                use backshlash to escape numeric field names
                                can be used multiple times
                                numeric ranges can be used e.g. 3-6
 
-     -e, --exclude [f1,f2,...] fields to exclude from diff check
-                               comma separated list of field names/indices 
+     -e, --exclude [f1,f2,...] fields to exclude from diff check (needs --key)
+                               comma separated list of field names/indices
                                same rules as --key
 
          --trim                removes space & tab characters from start & end
+         --                    everything after this is an input file
+
+  selection lists (--header, --key, --exclude) are comma separated. When a
+  different input separator is given and the list contains it, that separator
+  is used instead.
+
+Exit codes:
+  0  no differences
+  1  differences found
+  >1 an error occurred, see --exitCodes for the full list

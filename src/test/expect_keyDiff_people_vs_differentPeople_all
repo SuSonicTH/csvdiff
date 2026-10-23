@@ -1,4 +1,3 @@
-= Customer Id,First Name,Last Name
 < DD37Cf93aecA6Dc,Sheryl,Baxter
 > DD37Cf93aecA6Dc,Sheryl,Gunner
 < 1Ef7b82A4CAAD10,Preston,Lozano
@@ -11,5 +10,5 @@
 = C2dE4dEEc489ae0,Sheryl,Meyers
 = 8C2811a503C7c5a,Michelle,Gallagher
 + e35426EbDEceaFF,Tracey,Mata
-- 5Cef8BFA16c5e3c,Linda,Olsen
 - 6F94879bDAfE5a6,Roy,Berry
+- 5Cef8BFA16c5e3c,Linda,Olsen

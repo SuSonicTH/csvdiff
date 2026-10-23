@@ -1,20 +1,25 @@
 const std = @import("std");
 const runtime = @import("runtime.zig");
 
-pub const version = "csvdiff v0.1.4-beta";
+pub const version = "csvdiff v0.1.6-beta";
 
 pub const ExitCode = enum(u8) {
     OK,
+    differencesFound,
     noArgumentError,
     needTwoInputFiles,
-    stdinOrFileError,
     unknownArgumentError,
     argumentWithUnknownValueError,
     argumentValueMissingError,
-    includeAndExcludeTogether,
+    invalidFieldSelection,
+    noSuchField,
+    noHeader,
+    differentHeaderLengths,
+    keyRequired,
+    configRecursion,
 
+    couldNotOpenConfigFile,
     couldNotOpenInputFile,
-    couldNotOpenOutputFile,
     outOfMemory,
     genericError = 255,
 
@@ -25,16 +30,21 @@ pub const ExitCode = enum(u8) {
     pub fn message(self: ExitCode) []const u8 {
         switch (self) {
             .OK => return "",
+            .differencesFound => return "the files are different",
             .noArgumentError => return "no argument given, expecting at least 2 input files as arguments",
             .needTwoInputFiles => return "exactly 2 input files are needed got {d}",
-            .stdinOrFileError => return "use either --stdin or input file(s) not both",
             .unknownArgumentError => return "argument '{s}' is unknown",
             .argumentWithUnknownValueError => return "argument '{s}' got unknown value '{s}'",
             .argumentValueMissingError => return "value for argument '{s}' is missing",
-            .includeAndExcludeTogether => return "--include and --exclude cannot be used together",
+            .invalidFieldSelection => return "field selections must be non-empty, 1-based indices or names (ranges like 1-3 are allowed)",
+            .noSuchField => return "a selected field was not found in the header",
+            .noHeader => return "a header is required to select fields by name, use indices or --header",
+            .differentHeaderLengths => return "the files have a different number of header fields",
+            .keyRequired => return "--fieldDiff and --exclude can only be used together with --key",
+            .configRecursion => return "the config files reference each other too deeply",
 
+            .couldNotOpenConfigFile => return "could not open config file '{s}' reason: {}",
             .couldNotOpenInputFile => return "could not open input file '{s}' reason: {}",
-            .couldNotOpenOutputFile => return "could not open output file '{s}' reason: {}",
             .outOfMemory => return "could not allocate more memory",
             .genericError => return "unhandled error '{any}'",
         }
@@ -59,13 +69,13 @@ pub const ExitCode = enum(u8) {
     }
 
     fn _printErrorAndExit(comptime self: ExitCode, values: anytype) !noreturn {
-        var stdout_buffer: [1024]u8 = undefined;
-        var stdout_writer = std.Io.File.stdout().writer(runtime.io, &stdout_buffer);
-        var stdout = &stdout_writer.interface;
-        _ = try stdout.print("{s}\n\nError #{d}: ", .{ version, self.code() });
-        _ = try stdout.print(self.message(), values);
-        _ = try stdout.write("\n");
-        try stdout.flush();
+        var stderr_buffer: [1024]u8 = undefined;
+        var stderr_writer = std.Io.File.stderr().writer(runtime.io, &stderr_buffer);
+        var stderr = &stderr_writer.interface;
+        _ = try stderr.print("{s}\n\nError #{d}: ", .{ version, self.code() });
+        _ = try stderr.print(self.message(), values);
+        _ = try stderr.write("\n");
+        try stderr.flush();
         _ = try self.exit();
     }
 

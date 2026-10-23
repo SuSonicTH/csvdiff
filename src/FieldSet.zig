@@ -1,7 +1,5 @@
 const std = @import("std");
-const runtime = @import("runtime.zig");
 const CsvLine = @import("CsvLine.zig");
-const StringJoiner = @import("StringJoiner.zig");
 
 const Self = @This();
 
@@ -11,41 +9,44 @@ pub const SetEntry = struct {
     count: u32,
 };
 
-const FieldType = enum(u3) {
-    KEY,
-    KEY2,
-    KEY3,
-    VALUE,
-    VALUE2,
+/// Extra rows for a key that occurs with more than one value. The common case
+/// (one row per key) never allocates any of this.
+const OverflowEntry = struct {
+    entry: SetEntry,
+    next: u32, // 1-based index into overflow, 0 terminates the chain
 };
 
 const LoadFactor = 0.7;
 
 allocator: std.mem.Allocator,
-csvLine: CsvLine,
+csvLine: *CsvLine,
+compareCsvLine: CsvLine,
 keyIndices: []usize,
 valueIndices: []usize,
 data: []SetEntry,
 mask: u32,
 count: u32 = 0,
 size: u5,
-fieldValue: [5]StringJoiner = undefined,
+overflow: std.array_list.Managed(OverflowEntry),
+overflowHeads: ?[]u32 = null,
+hasOverflow: bool = false,
 
-pub fn init(initialSize: usize, keyIndices: []usize, valueIndices: []usize, csvLine: CsvLine, allocator: std.mem.Allocator) !Self {
-    const size = getNumberOfBits(initialSize);
-    var set: Self = .{
+pub fn init(initialSize: usize, keyIndices: []usize, valueIndices: []usize, csvLine: *CsvLine, allocator: std.mem.Allocator) !Self {
+    // Keep the table within 32 bit index/mask limits even for absurd input
+    // sizes; it will grow via resize when needed.
+    const size: u5 = @min(getNumberOfBits(initialSize), 30);
+
+    const set: Self = .{
         .allocator = allocator,
         .csvLine = csvLine,
+        .compareCsvLine = try CsvLine.init(allocator, csvLine.options),
         .keyIndices = keyIndices,
         .valueIndices = valueIndices,
         .data = try allocator.alloc(SetEntry, @as(u32, 1) << size),
         .mask = (@as(u32, 1) << size) - 1,
         .size = size,
+        .overflow = std.array_list.Managed(OverflowEntry).init(allocator),
     };
-
-    inline for (0..@backingInt(FieldType.VALUE2) + 1) |index| {
-        set.fieldValue[index] = try StringJoiner.init(allocator, '|');
-    }
 
     @memset(set.data, .{
         .line = null,
@@ -70,92 +71,277 @@ fn getNumberOfBits(size: usize) u5 {
 
 pub fn deinit(self: *Self) void {
     self.allocator.free(self.data);
-    inline for (0..@backingInt(FieldType.VALUE2) + 1) |index| {
-        self.fieldValue[index].deinit();
+    self.overflow.deinit();
+    if (self.overflowHeads) |heads| {
+        self.allocator.free(heads);
     }
+    self.compareCsvLine.deinit();
 }
 
-pub inline fn put(self: *Self, line: []const u8) !void {
-    const key = try self.getSelectedFields(.KEY, line);
-    const hash: u32 = @truncate(std.hash.CityHash32.hash(key));
-    try self.putHash(line, hash, key, 1);
+pub fn put(self: *Self, line: []const u8) !void {
+    const fields = try self.csvLine.parse(line);
+    const hash = self.computeKeyHash(fields);
+
+    try self.putRow(line, fields, hash, 1);
+
     if (self.load() > LoadFactor) {
         try self.resize();
     }
 }
 
-pub fn get(self: *Self, line: []const u8) !?*SetEntry {
-    const key = try self.getSelectedFields(.KEY, line);
-    const hash: u32 = @truncate(std.hash.CityHash32.hash(key));
-    const index = hash & self.mask;
-    const entry = &self.data[index];
-    if (entry.line == null) {
-        return null;
-    } else if (try self.keyMatches(entry, hash, key)) {
-        return entry;
-    } else if (try self.linearProbe(index + 1, self.data.len, hash, key)) |nextEntry| {
-        if (nextEntry.line == null) {
-            return null;
-        } else {
-            return nextEntry;
+/// Inserts a row without checking the load factor. Existing key+value rows
+/// only get their count increased; a new value for an existing key is stored
+/// in the overflow chain.
+fn putRow(self: *Self, line: []const u8, fields: [][]const u8, hash: u32, count: u32) !void {
+    const slot = try self.findSlot(hash, fields);
+
+    if (!slot.found) {
+        self.data[slot.index] = .{
+            .line = line,
+            .hash = hash,
+            .count = count,
+        };
+        self.count += 1;
+        return;
+    }
+
+    const primary = &self.data[slot.index];
+    if (try self.valuesMatchFields(primary.line.?, fields)) {
+        primary.count += count;
+        return;
+    }
+
+    if (self.hasOverflow) {
+        var head = self.overflowHeads.?[slot.index];
+        while (head != 0) {
+            const overflowEntry = &self.overflow.items[head - 1];
+            if (try self.valuesMatchFields(overflowEntry.entry.line.?, fields)) {
+                overflowEntry.entry.count += count;
+                return;
+            }
+            head = overflowEntry.next;
         }
-    } else if (try self.linearProbe(0, index, hash, key)) |nextEntry| {
-        if (nextEntry.line == null) {
-            return null;
-        } else {
-            return nextEntry;
+    }
+
+    try self.appendOverflow(slot.index, line, hash, count);
+}
+
+pub fn get(self: *Self, line: []const u8) !?*SetEntry {
+    const fields = try self.csvLine.parse(line);
+    const hash = self.computeKeyHash(fields);
+    const slot = try self.findSlot(hash, fields);
+    if (!slot.found) return null;
+
+    const primary = &self.data[slot.index];
+
+    // Prefer an exact value match so that duplicate keys pair up correctly.
+    if (primary.count > 0 and try self.valuesMatchFields(primary.line.?, fields)) {
+        return primary;
+    }
+
+    if (self.hasOverflow) {
+        var head = self.overflowHeads.?[slot.index];
+        while (head != 0) {
+            const overflowEntry = &self.overflow.items[head - 1];
+            if (overflowEntry.entry.count > 0 and try self.valuesMatchFields(overflowEntry.entry.line.?, fields)) {
+                return &overflowEntry.entry;
+            }
+            head = overflowEntry.next;
+        }
+    }
+
+    // No exact match left: any remaining row with this key is a change
+    // candidate.
+    return self.takeFromSlot(slot.index);
+}
+
+/// Returns any remaining row with the same key, without comparing values.
+/// Used after the exact-match pass, where all exact matches are already
+/// consumed, so every returned row is a change candidate.
+pub fn getFallback(self: *Self, line: []const u8) !?*SetEntry {
+    const fields = try self.csvLine.parse(line);
+    const hash = self.computeKeyHash(fields);
+    const slot = try self.findSlot(hash, fields);
+    if (!slot.found) return null;
+    return self.takeFromSlot(slot.index);
+}
+
+pub fn takeFromSlot(self: *Self, slot: u32) ?*SetEntry {
+    const primary = &self.data[slot];
+    if (primary.count > 0) {
+        return primary;
+    }
+
+    if (self.hasOverflow) {
+        var head = self.overflowHeads.?[slot];
+        while (head != 0) {
+            const overflowEntry = &self.overflow.items[head - 1];
+            if (overflowEntry.entry.count > 0) {
+                return &overflowEntry.entry;
+            }
+            head = overflowEntry.next;
         }
     }
     return null;
 }
 
-fn putHash(self: *Self, line: []const u8, hash: u32, key: []const u8, count: u32) !void {
-    const index = hash & self.mask;
-    var entry: *SetEntry = &self.data[index];
+pub const MatchResult = enum {
+    exact,
+    existing,
+    missing,
+};
 
-    if (entry.line == null) {
-        updateEntry(entry, hash, line, count);
-        self.count += 1;
-    } else if (try self.keyMatches(entry, hash, key)) {
-        if (!try self.valueMatches(entry, line)) {
-            var stdout_buffer: [1024]u8 = undefined;
-            var stdout_writer = std.Io.File.stdout().writer(runtime.io, &stdout_buffer);
-            const stdout = &stdout_writer.interface;
-            _ = try stdout.print("{s}\n{s}\n", .{ line, entry.line.? });
-            return error.duplicateKeyDifferentValues1;
-        }
-        entry.count += 1;
-        return;
-    } else {
-        if (try self.linearProbe(index + 1, self.data.len, hash, key)) |nextEntry| {
-            if (nextEntry.line != null and !try self.valueMatches(nextEntry, line)) {
-                return error.duplicateKeyDifferentValues2;
+pub const Match = struct {
+    result: MatchResult,
+    slot: u32,
+};
+
+/// Classifies a row from the second file and consumes an exact key+value
+/// match when possible. `existing` means the key is present but no remaining
+/// value matches; `missing` means the key is not present at all.
+pub fn match(self: *Self, line: []const u8) !Match {
+    const fields = try self.csvLine.parse(line);
+    const hash = self.computeKeyHash(fields);
+    const slot = try self.findSlot(hash, fields);
+    if (!slot.found) return .{ .result = .missing, .slot = 0 };
+
+    const primary = &self.data[slot.index];
+    if (primary.count > 0 and try self.valuesMatchFields(primary.line.?, fields)) {
+        primary.count -= 1;
+        return .{ .result = .exact, .slot = slot.index };
+    }
+
+    if (self.hasOverflow) {
+        var head = self.overflowHeads.?[slot.index];
+        while (head != 0) {
+            const overflowEntry = &self.overflow.items[head - 1];
+            if (overflowEntry.entry.count > 0 and try self.valuesMatchFields(overflowEntry.entry.line.?, fields)) {
+                overflowEntry.entry.count -= 1;
+                return .{ .result = .exact, .slot = slot.index };
             }
-            updateEntry(nextEntry, hash, line, count);
-        } else if (try self.linearProbe(0, index, hash, key)) |nextEntry| {
-            if (nextEntry.line != null and !try self.valueMatches(nextEntry, line)) {
-                return error.duplicateKeyDifferentValues3;
-            }
-            updateEntry(nextEntry, hash, line, count);
-        } else {
-            @panic("HashSet is full");
+            head = overflowEntry.next;
         }
-        self.count += 1;
+    }
+    return .{ .result = .existing, .slot = slot.index };
+}
+
+pub fn matchExact(self: *Self, line: []const u8) !bool {
+    return (try self.match(line)).result == .exact;
+}
+
+pub fn eachRemaining(self: *Self, context: anytype, comptime func: fn (@TypeOf(context), *SetEntry) anyerror!void) !void {
+    for (self.data, 0..) |*entry, slot| {
+        if (entry.line != null and entry.count > 0) {
+            try func(context, entry);
+        }
+
+        if (self.hasOverflow) {
+            var head = self.overflowHeads.?[slot];
+            while (head != 0) {
+                const overflowEntry = &self.overflow.items[head - 1];
+                if (overflowEntry.entry.count > 0) {
+                    try func(context, &overflowEntry.entry);
+                }
+                head = overflowEntry.next;
+            }
+        }
     }
 }
 
-inline fn linearProbe(self: *Self, start: u64, end: u64, hash: u32, key: []const u8) !?*SetEntry {
-    var index: u64 = start;
-    while (index < end) {
+inline fn fieldAt(fields: [][]const u8, index: usize) []const u8 {
+    return if (index < fields.len) fields[index] else "";
+}
+
+fn computeKeyHash(self: *Self, fields: [][]const u8) u32 {
+    var hash: u32 = 2166136261;
+    for (self.keyIndices) |index| {
+        const value = fieldAt(fields, index);
+        hash = (hash ^ std.hash.CityHash32.hash(value)) *% 16777619;
+        hash = (hash ^ @as(u32, @truncate(value.len))) *% 16777619;
+    }
+    return hash;
+}
+
+inline fn keysMatchFields(self: *Self, entry: *SetEntry, fields: [][]const u8) !bool {
+    const storedFields = try self.compareCsvLine.parse(entry.line.?);
+    for (self.keyIndices) |index| {
+        if (!std.mem.eql(u8, fieldAt(fields, index), fieldAt(storedFields, index))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+pub inline fn valueMatches(self: *Self, entry: *SetEntry, line: []const u8) !bool {
+    const fields = try self.csvLine.parse(line);
+    return self.valuesMatchFields(entry.line.?, fields);
+}
+
+fn valuesMatchFields(self: *Self, storedLine: []const u8, fields: [][]const u8) !bool {
+    if (self.valueIndices.len == 0) return true;
+
+    const storedFields = try self.compareCsvLine.parse(storedLine);
+    for (self.valueIndices) |index| {
+        if (!std.mem.eql(u8, fieldAt(fields, index), fieldAt(storedFields, index))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+const Slot = struct {
+    index: u32,
+    found: bool,
+};
+
+/// Finds the slot containing `key`, or the first empty slot where it would be
+/// inserted. Uses the same linear probing as the original implementation.
+fn findSlot(self: *Self, hash: u32, fields: [][]const u8) !Slot {
+    const start: u32 = hash & self.mask;
+    const len: u32 = @intCast(self.data.len);
+
+    var index = start;
+    var step: u32 = 0;
+    while (step < len) : (step += 1) {
         const entry = &self.data[index];
         if (entry.line == null) {
-            return entry;
-        } else if (try self.keyMatches(entry, hash, key)) {
-            return entry;
+            return .{ .index = index, .found = false };
         }
-        index += 1;
+        if (entry.hash == hash and try self.keysMatchFields(entry, fields)) {
+            return .{ .index = index, .found = true };
+        }
+        index = (index + 1) & self.mask;
     }
-    return null;
+
+    @panic("HashSet is full");
+}
+
+fn ensureOverflowHeads(self: *Self) ![]u32 {
+    if (self.overflowHeads) |heads| {
+        return heads;
+    }
+
+    const heads = try self.allocator.alloc(u32, self.data.len);
+    @memset(heads, 0);
+    self.overflowHeads = heads;
+    return heads;
+}
+
+fn appendOverflow(self: *Self, slot: u32, line: []const u8, hash: u32, count: u32) !void {
+    const heads = try self.ensureOverflowHeads();
+    const previousHead = heads[slot];
+
+    try self.overflow.append(.{
+        .entry = .{
+            .line = line,
+            .hash = hash,
+            .count = count,
+        },
+        .next = previousHead,
+    });
+
+    heads[slot] = @intCast(self.overflow.items.len);
+    self.hasOverflow = true;
 }
 
 pub inline fn load(self: *Self) f32 {
@@ -166,75 +352,52 @@ pub inline fn load(self: *Self) f32 {
 }
 
 fn resize(self: *Self) !void {
-    if (self.size >= 64) {
+    // The entry count and mask are 32 bit, so 31 is the largest usable size.
+    if (self.size >= 31) {
         return error.MaximumHashSetSizeReached;
     }
+
+    const oldData = self.data;
+    const oldHeads = self.overflowHeads;
+    var oldOverflow = self.overflow;
+
+    self.overflow = std.array_list.Managed(OverflowEntry).init(self.allocator);
+    self.overflowHeads = null;
+    self.hasOverflow = false;
 
     self.size += 1;
     self.mask = (@as(u32, 1) << self.size) - 1;
     self.count = 0;
-
-    const old = self.data;
-    self.data = try self.allocator.alloc(SetEntry, @as(u64, 1) << self.size);
+    self.data = try self.allocator.alloc(SetEntry, @as(u32, 1) << self.size);
     @memset(self.data, .{
         .line = null,
         .hash = 0,
         .count = 0,
     });
 
-    for (old) |entry| {
-        if (entry.line != null) {
-            const storedKey = try self.getSelectedFields(.KEY3, entry.line.?);
-            try self.putHash(entry.line.?, entry.hash, storedKey, entry.count);
+    for (oldData, 0..) |*entry, slot| {
+        if (entry.line) |line| {
+            const fields = try self.csvLine.parse(line);
+            try self.putRow(line, fields, entry.hash, entry.count);
+        }
+
+        if (oldHeads) |heads| {
+            var head = heads[slot];
+            while (head != 0) {
+                const overflowEntry = &oldOverflow.items[head - 1];
+                const line = overflowEntry.entry.line.?;
+                const fields = try self.csvLine.parse(line);
+                try self.putRow(line, fields, overflowEntry.entry.hash, overflowEntry.entry.count);
+                head = overflowEntry.next;
+            }
         }
     }
 
-    self.allocator.free(old);
-}
-
-pub inline fn getSelectedFields(self: *Self, comptime fieldType: FieldType, line: []const u8) ![]const u8 {
-    const indices: []usize = if (fieldType == .VALUE or fieldType == .VALUE2) self.valueIndices else self.keyIndices;
-
-    var joiner: *StringJoiner = &self.fieldValue[@backingInt(fieldType)];
-    joiner.clear();
-
-    const fields = try self.csvLine.parse(line);
-
-    for (0..indices.len) |index| {
-        if (indices[index] >= fields.len) {
-            try joiner.add("");
-        } else {
-            try joiner.add(fields[indices[index]]);
-        }
+    self.allocator.free(oldData);
+    if (oldHeads) |heads| {
+        self.allocator.free(heads);
     }
-    return joiner.get();
-}
-
-inline fn keyMatches(self: *Self, entry: *SetEntry, hash: u32, key: []const u8) !bool {
-    if (entry.hash == hash) {
-        const storedKey = try self.getSelectedFields(.KEY2, entry.line.?);
-        if (std.mem.eql(u8, key, storedKey)) { //todo also chek values for equal -> error if not
-            return true;
-        }
-    }
-    return false;
-}
-
-pub inline fn valueMatches(self: *Self, entry: *SetEntry, line: []const u8) !bool {
-    if (self.valueIndices.len == 0) return true;
-    const value = try self.getSelectedFields(.VALUE, line);
-    const entryValue = try self.getSelectedFields(.VALUE2, entry.line.?);
-    return std.mem.eql(u8, value, entryValue);
-}
-
-fn updateEntry(entry: *SetEntry, hash: u32, line: []const u8, count: u32) void {
-    if (entry.line == null) {
-        entry.line = line;
-        entry.count = count;
-        entry.hash = hash;
-    } else {
-        entry.count += count;
-    }
+    oldOverflow.deinit();
 }
 
 test "getNumberOfBits" {
@@ -247,4 +410,127 @@ test "getNumberOfBits" {
     try std.testing.expectEqual(5, getNumberOfBits(15));
     try std.testing.expectEqual(11, getNumberOfBits(1 << 10));
     try std.testing.expectEqual(25, getNumberOfBits(14976460));
+}
+
+const testing = std.testing;
+
+test "put/get" {
+    var csvLine = try CsvLine.init(testing.allocator, .{});
+    defer csvLine.deinit();
+
+    var keyIndices = [_]usize{0};
+    var valueIndices = [_]usize{1};
+
+    var set = try Self.init(4, &keyIndices, &valueIndices, &csvLine, testing.allocator);
+    defer set.deinit();
+
+    try set.put("1,a");
+    try set.put("2,b");
+    try set.put("1,a");
+
+    try testing.expectEqual(2, (try set.get("1,a")).?.count);
+    try testing.expectEqual(1, (try set.get("2,b")).?.count);
+    try testing.expectEqual(null, try set.get("3,c"));
+}
+
+test "duplicate keys with different values are kept" {
+    var csvLine = try CsvLine.init(testing.allocator, .{});
+    defer csvLine.deinit();
+
+    var keyIndices = [_]usize{0};
+    var valueIndices = [_]usize{1};
+
+    var set = try Self.init(4, &keyIndices, &valueIndices, &csvLine, testing.allocator);
+    defer set.deinit();
+
+    try set.put("1,a");
+    try set.put("1,b");
+    try set.put("1,a");
+
+    const a = (try set.get("1,a")).?;
+    try testing.expectEqual(2, a.count);
+
+    const b = (try set.get("1,b")).?;
+    try testing.expectEqual(1, b.count);
+
+    try testing.expect(!try set.valueMatches(a, "1,b"));
+}
+
+test "fields containing the join separator do not collide" {
+    var csvLine = try CsvLine.init(testing.allocator, .{});
+    defer csvLine.deinit();
+
+    var keyIndices = [_]usize{0};
+    var valueIndices = [_]usize{ 1, 2 };
+
+    var set = try Self.init(4, &keyIndices, &valueIndices, &csvLine, testing.allocator);
+    defer set.deinit();
+
+    try set.put("1,a|b,c");
+
+    // No exact value match exists, so the lookup falls back to the key. The
+    // values must still compare as different.
+    const entry = (try set.get("1,a,b|c")).?;
+    try testing.expect(!try set.valueMatches(entry, "1,a,b|c"));
+}
+
+test "eachRemaining reports unmatched rows" {
+    var csvLine = try CsvLine.init(testing.allocator, .{});
+    defer csvLine.deinit();
+
+    var keyIndices = [_]usize{0};
+    var valueIndices = [_]usize{1};
+
+    var set = try Self.init(4, &keyIndices, &valueIndices, &csvLine, testing.allocator);
+    defer set.deinit();
+
+    try set.put("1,a");
+    try set.put("2,b");
+
+    const first = (try set.get("1,a")).?;
+    first.count -= 1;
+
+    const Collector = struct {
+        lines: *std.array_list.Managed([]const u8),
+
+        fn collect(context: @This(), entry: *SetEntry) anyerror!void {
+            try context.lines.append(entry.line.?);
+        }
+    };
+
+    var remaining = std.array_list.Managed([]const u8).init(testing.allocator);
+    defer remaining.deinit();
+
+    try set.eachRemaining(Collector{ .lines = &remaining }, Collector.collect);
+
+    try testing.expectEqual(1, remaining.items.len);
+    try testing.expectEqualStrings("2,b", remaining.items[0]);
+}
+
+test "overflow survives resize" {
+    var csvLine = try CsvLine.init(testing.allocator, .{});
+    defer csvLine.deinit();
+
+    var keyIndices = [_]usize{0};
+    var valueIndices = [_]usize{1};
+
+    var set = try Self.init(1, &keyIndices, &valueIndices, &csvLine, testing.allocator);
+    defer set.deinit();
+
+    try set.put("1,a");
+    try set.put("1,b");
+    try set.put("1,a");
+
+    // Force several resizes and make sure both values are still matchable.
+    var index: usize = 2;
+    while (index < 20) : (index += 1) {
+        var key_buffer: [16]u8 = undefined;
+        const line = try std.fmt.bufPrint(&key_buffer, "{d},v", .{index});
+        try set.put(line);
+    }
+
+    try testing.expectEqual(2, (try set.get("1,a")).?.count);
+    try testing.expectEqual(1, (try set.get("1,b")).?.count);
+    try testing.expect(try set.matchExact("1,b"));
+    try testing.expect(!try set.matchExact("1,b"));
 }

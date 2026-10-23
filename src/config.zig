@@ -11,7 +11,7 @@ const State = enum {
 
 pub fn readConfigFromFile(io: std.Io, env: *const std.process.Environ.Map, name: []const u8, allocator: std.mem.Allocator) !std.array_list.Managed([]const u8) {
     const file = std.Io.Dir.cwd().openFile(io, name, .{}) catch blk: {
-        if (name[0] == '/' or name[0] == '\\') {
+        if (name.len == 0 or name[0] == '/' or name[0] == '\\') {
             return error.FileNotFound;
         }
 
@@ -163,9 +163,9 @@ pub fn readConfigFromFile(io: std.Io, env: *const std.process.Environ.Map, name:
 
 inline fn moveToLeft(config: []u8, pos: usize, comptime move: u2) !void {
     std.mem.copyForwards(u8, config[pos - 1 ..], config[pos + move - 1 ..]);
-    config[config.len - 1] = ' ';
-    if (move == 2) {
-        config[config.len - 2] = ' ';
+    var index: usize = 0;
+    while (index < move) : (index += 1) {
+        config[config.len - 1 - index] = ' ';
     }
 }
 
@@ -188,24 +188,28 @@ fn openConfigFile(io: std.Io, home: []const u8, sub1: []const u8, sub2: []const 
     var path = try std.array_list.Managed(u8).initCapacity(allocator, home.len + sub1.len + sub2.len + name.len + 3);
     defer path.deinit();
 
-    try path.appendSlice(home);
-    if (path.items[path.items.len - 1] != '/' and path.items[path.items.len - 1] != '\\') {
-        try path.append('/');
+    try appendPathComponent(&path, home);
+    try appendPathComponent(&path, sub1);
+    try appendPathComponent(&path, sub2);
+    try appendPathComponent(&path, name);
+
+    if (path.items.len == 0) {
+        return error.ReadingConfig;
     }
-
-    try path.appendSlice(sub1);
-    if (path.items[path.items.len - 1] != '/' and path.items[path.items.len - 1] != '\\') {
-        try path.append('/');
-    }
-
-    try path.appendSlice(sub2);
-    if (path.items[path.items.len - 1] != '/' and path.items[path.items.len - 1] != '\\') {
-        try path.append('/');
-    }
-
-    try path.appendSlice(name);
-
     return try std.Io.Dir.cwd().openFile(io, path.items, .{});
+}
+
+fn appendPathComponent(path: *std.array_list.Managed(u8), component: []const u8) !void {
+    if (component.len == 0) {
+        return;
+    }
+    if (path.items.len > 0) {
+        const last = path.items[path.items.len - 1];
+        if (last != '/' and last != '\\') {
+            try path.append('/');
+        }
+    }
+    try path.appendSlice(component);
 }
 
 test "reads it" {
@@ -225,7 +229,7 @@ test "reads it" {
     try expectEqualStrings("1,2,3", arguments.items[2]);
     try expectEqualStrings("--trim", arguments.items[3]);
     try expectEqualStrings("-I", arguments.items[4]);
-    try expectEqualStrings("quouted argument, with , spaces", arguments.items[5]);
+    try expectEqualStrings("quoted argument, with , spaces", arguments.items[5]);
     try expectEqualStrings("--include", arguments.items[6]);
     try expectEqualStrings("another one with spaces", arguments.items[7]);
     try expectEqualStrings("--separator", arguments.items[8]);

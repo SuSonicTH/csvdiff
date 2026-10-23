@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 function print_help() {
     echo "csvdiff build"
@@ -34,7 +34,6 @@ function exit_argument_error() {
 
 ALL="false"
 UPX="false"
-TEST="false"
 CLEAN="false"
 TESTS="false"
 RELEASE="false"

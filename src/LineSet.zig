@@ -15,7 +15,9 @@ count: u32 = 0,
 size: u5,
 
 pub fn init(initialSize: usize, allocator: std.mem.Allocator) !Self {
-    const size = getNumberOfBits(initialSize);
+    // Keep the table within 32 bit index/mask limits even for absurd input
+    // sizes; it will grow via resize when needed.
+    const size: u5 = @min(getNumberOfBits(initialSize), 30);
     const set: Self = .{
         .allocator = allocator,
         .data = try allocator.alloc(SetEntry, @as(u32, 1) << size),
@@ -57,25 +59,25 @@ inline fn putHash(self: *Self, line: []const u8, hash: u32, count: u32) !void {
     var entry: *SetEntry = &self.data[index];
 
     if (entry.line == null) {
-        updateEntry(entry, hash, line, count);
+        _ = updateEntry(entry, hash, line, count);
         self.count += 1;
     } else if (isSame(entry, hash, line)) {
         entry.count += 1;
         return;
     } else {
         if (self.linearProbe(index + 1, self.data.len, hash, line)) |nextEntry| {
-            updateEntry(nextEntry, hash, line, count);
+            if (updateEntry(nextEntry, hash, line, count)) self.count += 1;
         } else if (self.linearProbe(0, index, hash, line)) |nextEntry| {
-            updateEntry(nextEntry, hash, line, count);
+            if (updateEntry(nextEntry, hash, line, count)) self.count += 1;
         } else {
             @panic("HashSet is full");
         }
-        self.count += 1;
     }
 }
 
 fn resize(self: *Self) !void {
-    if (self.size >= 64) {
+    // The entry count and mask are 32 bit, so 31 is the largest usable size.
+    if (self.size >= 31) {
         return error.MaximumHashSetSizeReached;
     }
 
@@ -107,13 +109,15 @@ fn isSame(entry: *SetEntry, hash: u32, line: []const u8) bool {
     return false;
 }
 
-fn updateEntry(entry: *SetEntry, hash: u32, line: []const u8, count: u32) void {
+fn updateEntry(entry: *SetEntry, hash: u32, line: []const u8, count: u32) bool {
     if (entry.line == null) {
         entry.line = line;
         entry.count = count;
         entry.hash = hash;
+        return true;
     } else {
         entry.count += count;
+        return false;
     }
 }
 
