@@ -1,4 +1,5 @@
 const std = @import("std");
+const runtime = @import("runtime.zig");
 const CsvLine = @import("CsvLine.zig");
 const StringJoiner = @import("StringJoiner.zig");
 
@@ -42,7 +43,7 @@ pub fn init(initialSize: usize, keyIndices: []usize, valueIndices: []usize, csvL
         .size = size,
     };
 
-    inline for (0..@intFromEnum(FieldType.VALUE2) + 1) |index| {
+    inline for (0..@backingInt(FieldType.VALUE2) + 1) |index| {
         set.fieldValue[index] = try StringJoiner.init(allocator, '|');
     }
 
@@ -69,7 +70,7 @@ fn getNumberOfBits(size: usize) u5 {
 
 pub fn deinit(self: *Self) void {
     self.allocator.free(self.data);
-    inline for (0..@intFromEnum(FieldType.VALUE2) + 1) |index| {
+    inline for (0..@backingInt(FieldType.VALUE2) + 1) |index| {
         self.fieldValue[index].deinit();
     }
 }
@@ -118,7 +119,7 @@ fn putHash(self: *Self, line: []const u8, hash: u32, key: []const u8, count: u32
     } else if (try self.keyMatches(entry, hash, key)) {
         if (!try self.valueMatches(entry, line)) {
             var stdout_buffer: [1024]u8 = undefined;
-            var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+            var stdout_writer = std.Io.File.stdout().writer(runtime.io, &stdout_buffer);
             const stdout = &stdout_writer.interface;
             _ = try stdout.print("{s}\n{s}\n", .{ line, entry.line.? });
             return error.duplicateKeyDifferentValues1;
@@ -194,7 +195,7 @@ fn resize(self: *Self) !void {
 pub inline fn getSelectedFields(self: *Self, comptime fieldType: FieldType, line: []const u8) ![]const u8 {
     const indices: []usize = if (fieldType == .VALUE or fieldType == .VALUE2) self.valueIndices else self.keyIndices;
 
-    var joiner: *StringJoiner = &self.fieldValue[@intFromEnum(fieldType)];
+    var joiner: *StringJoiner = &self.fieldValue[@backingInt(fieldType)];
     joiner.clear();
 
     const fields = try self.csvLine.parse(line);

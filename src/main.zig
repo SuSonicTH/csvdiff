@@ -1,4 +1,5 @@
 const std = @import("std");
+const runtime = @import("runtime.zig");
 const ExitCode = @import("exitCode.zig").ExitCode;
 const Options = @import("options.zig").Options;
 const Colors = @import("options.zig").Colors;
@@ -9,37 +10,29 @@ const FileReader = @import("FileReader.zig");
 const LineSet = @import("LineSet.zig");
 const FieldSet = @import("FieldSet.zig");
 const CsvLine = @import("CsvLine.zig");
-const builtin = @import("builtin");
 
-pub fn main() !void {
-    var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
-    const allocator, const is_debug = gpa: {
-        break :gpa switch (builtin.mode) {
-            .Debug, .ReleaseSafe => .{ debug_allocator.allocator(), true },
-            .ReleaseFast, .ReleaseSmall => .{ std.heap.smp_allocator, false },
-        };
-    };
-    defer if (is_debug) {
-        _ = debug_allocator.deinit();
-    };
+pub fn main(init: std.process.Init) !void {
+    runtime.io = init.io;
+    runtime.allocator = init.arena.allocator();
+    runtime.environ = init.environ_map;
 
-    _main(allocator) catch |err| switch (err) {
+    _main(init) catch |err| switch (err) {
         error.OutOfMemory => ExitCode.outOfMemory.printErrorAndExit(.{}),
         else => ExitCode.genericError.printErrorAndExit(.{err}),
     };
 }
 
-fn _main(allocator: std.mem.Allocator) !void {
-    var timer = try std.time.Timer.start();
+fn _main(init: std.process.Init) !void {
+    const allocator = runtime.allocator;
+    const timerStart = std.Io.Clock.awake.now(runtime.io);
 
     var options = try Options.init(allocator);
     defer options.deinit();
 
-    if (config.readConfigFromFile("default.config", allocator) catch null) |defaultArguments| {
+    if (config.readConfigFromFile(runtime.io, init.environ_map, "default.config", allocator) catch null) |defaultArguments| {
         try ArgumentParser.parse(&options, defaultArguments.items, allocator);
     }
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
+    const args = try init.minimal.args.toSlice(allocator);
     const arguments = try castArgs(args, allocator);
     defer allocator.free(arguments);
 
@@ -49,7 +42,7 @@ fn _main(allocator: std.mem.Allocator) !void {
     try doDiff(&options, allocator);
 
     var stderr_buffer: [1024]u8 = undefined;
-    var stderr_writer = std.fs.File.stderr().writer(&stderr_buffer);
+    var stderr_writer = std.Io.File.stderr().writer(runtime.io, &stderr_buffer);
     var stderr = &stderr_writer.interface;
 
     if (options.stats) {
@@ -57,7 +50,8 @@ fn _main(allocator: std.mem.Allocator) !void {
     }
 
     if (options.time) {
-        const timeNeeded = @as(f32, @floatFromInt(timer.lap())) / 1000000.0;
+        const elapsed = timerStart.durationTo(std.Io.Clock.awake.now(runtime.io));
+        const timeNeeded = @as(f32, @floatFromInt(elapsed.toNanoseconds())) / 1000000.0;
 
         if (timeNeeded > 1000) {
             _ = try stderr.print("time needed: {d:0.2}s\n", .{timeNeeded / 1000.0});
@@ -98,7 +92,7 @@ const Stats = struct {
     }
 };
 
-fn castArgs(args: [][:0]u8, allocator: std.mem.Allocator) ![][]const u8 {
+fn castArgs(args: []const [:0]const u8, allocator: std.mem.Allocator) ![][]const u8 {
     var ret = try allocator.alloc([]const u8, args.len);
     for (args, 0..) |arg, i| {
         ret[i] = arg[0..];
@@ -108,7 +102,7 @@ fn castArgs(args: [][:0]u8, allocator: std.mem.Allocator) ![][]const u8 {
 
 fn doDiff(options: *Options, allocator: std.mem.Allocator) !void {
     var stdout_buffer: [1024]u8 = undefined;
-    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    var stdout_writer = std.Io.File.stdout().writer(runtime.io, &stdout_buffer);
     var stdout = &stdout_writer.interface;
 
     if (options.listHeader) {
@@ -136,11 +130,14 @@ fn listHeader(options: *Options, writer: *std.Io.Writer, allocator: std.mem.Allo
 }
 
 fn printHeader(header: [][]const u8) !void {
-    const out = std.io.getStdOut();
+    var stdout_buffer: [1024]u8 = undefined;
+    var stdout_writer = std.Io.File.stdout().writer(runtime.io, &stdout_buffer);
+    var stdout = &stdout_writer.interface;
     for (header) |field| {
-        _ = try out.write(field);
-        _ = try out.write("\n");
+        _ = try stdout.write(field);
+        _ = try stdout.write("\n");
     }
+    try stdout.flush();
 }
 
 fn lineDiff(options: *Options, writer: *std.Io.Writer, allocator: std.mem.Allocator) !void {
@@ -360,13 +357,16 @@ fn keyDiffPerField(fileB: *FileReader, fieldSet: *FieldSet, writer: *std.Io.Writ
 const testing = std.testing;
 
 const TestRun = struct {
-    output: std.array_list.Managed(u8),
+    output: std.Io.Writer.Allocating,
     options: Options,
     expected: []const u8,
 
     fn init(comptime file1: []const u8, comptime file2: []const u8, comptime expected: []const u8) !TestRun {
+        runtime.io = testing.io;
+        runtime.allocator = testing.allocator;
+
         var testRun: TestRun = .{
-            .output = std.array_list.Managed(u8).init(testing.allocator),
+            .output = std.Io.Writer.Allocating.init(testing.allocator),
             .options = try Options.init(testing.allocator),
             .expected = @embedFile("test/" ++ expected),
         };
@@ -375,28 +375,16 @@ const TestRun = struct {
         return testRun;
     }
 
-    fn writer(self: *TestRun) !std.io.AnyWriter {
-        return self.output.writer().any();
-    }
-
     fn runLineDiff(self: *TestRun) !void {
         defer self.deinit();
-        var buffer: [1024]u8 = undefined;
-        var adapter = self.output.writer().adaptToNewApi(&buffer);
-        const arrayWriter = &adapter.new_interface;
-        try lineDiff(&self.options, arrayWriter, testing.allocator);
-        try arrayWriter.flush();
-        try testing.expectEqualStrings(self.expected, self.output.items);
+        try lineDiff(&self.options, &self.output.writer, testing.allocator);
+        try testing.expectEqualStrings(self.expected, self.output.written());
     }
 
     fn runKeyDiff(self: *TestRun) !void {
         defer self.deinit();
-        var buffer: [1024]u8 = undefined;
-        var adapter = self.output.writer().adaptToNewApi(&buffer);
-        const arrayWriter = &adapter.new_interface;
-        try keyDiff(&self.options, arrayWriter, testing.allocator);
-        try arrayWriter.flush();
-        try testing.expectEqualStrings(self.expected, self.output.items);
+        try keyDiff(&self.options, &self.output.writer, testing.allocator);
+        try testing.expectEqualStrings(self.expected, self.output.written());
     }
 
     fn deinit(self: *TestRun) void {

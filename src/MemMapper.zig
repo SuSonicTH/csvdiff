@@ -2,51 +2,54 @@ const std = @import("std");
 const builtin = @import("builtin");
 const Self = @This();
 
-file: std.fs.File,
+file: std.Io.File,
+io: std.Io,
 file_mapping: windows.HANDLE = undefined,
 
-pub fn init(file: std.fs.File, writeable: bool) !Self {
-    if (builtin.os.tag == .windows) {
-        const protection: windows.DWORD = if (writeable) windows.PAGE_READWRITE else windows.PAGE_READONLY;
-        const file_mapping = CreateFileMappingA(file.handle, null, protection, 0, 0, null);
+pub fn init(file: std.Io.File, io: std.Io, writeable: bool) !Self {
+    if (builtin.target.os.tag == .windows) {
+        const protection: windows.PAGE = if (writeable) .{ .READWRITE = true } else .{ .READONLY = true };
+        const file_mapping = CreateFileMappingA(file.handle, null, @bitCast(protection), 0, 0, null);
         if (file_mapping == null) {
             return MemMapperError.CouldNotMapFile;
         }
 
         return .{
             .file = file,
+            .io = io,
             .file_mapping = file_mapping.?,
         };
     } else {
         return .{
             .file = file,
+            .io = io,
         };
     }
 }
 
 pub fn deinit(self: *Self) void {
-    if (builtin.os.tag == .windows) {
-        _ = CloseHandle(self.file_mapping);
+    if (builtin.target.os.tag == .windows) {
+        CloseHandle(self.file_mapping);
     }
 }
 
 pub fn map(self: *Self, comptime T: type, options: Options) ![]T {
-    const len = if (options.size != 0) options.size else (try self.file.stat()).size;
+    const len = if (options.size != 0) options.size else (try self.file.stat(self.io)).size;
 
-    if (builtin.os.tag == .windows) {
+    if (builtin.target.os.tag == .windows) {
         var access: windows.DWORD = 0;
         if (options.read) access |= FILE_MAP_READ;
         if (options.write) access |= FILE_MAP_WRITE;
 
-        const ptr = MapViewOfFile(self.file_mapping, FILE_MAP_READ, 0, 0, len);
+        const ptr = MapViewOfFile(self.file_mapping, access, 0, 0, len);
         if (ptr == null) {
             return MemMapperError.CouldNotMapRegion;
         }
         return @as([*]T, @ptrCast(ptr))[0..len];
     } else {
-        var prot: u32 = 0;
-        if (options.read) prot |= std.posix.PROT.READ;
-        if (options.write) prot |= std.posix.PROT.WRITE;
+        var prot: std.posix.PROT = .{};
+        if (options.read) prot.READ = true;
+        if (options.write) prot.WRITE = true;
 
         return @ptrCast(try std.posix.mmap(null, len, prot, .{ .TYPE = .SHARED }, self.file.handle, options.offset));
     }
@@ -54,7 +57,7 @@ pub fn map(self: *Self, comptime T: type, options: Options) ![]T {
 
 pub fn unmap(self: *Self, memory: anytype) void {
     _ = self;
-    if (builtin.os.tag == .windows) {
+    if (builtin.target.os.tag == .windows) {
         _ = UnmapViewOfFile(@constCast(std.mem.sliceAsBytes(memory).ptr));
     } else {
         std.posix.munmap(@alignCast(memory));
@@ -87,20 +90,17 @@ const CloseHandle = windows.CloseHandle;
 // Test
 
 const testing = std.testing;
-const testUtils = @import("testUtils.zig");
-
-const writeFile = testUtils.writeFile;
 
 test "simple mapping for reading" {
-    const message = @embedFile("test/MemMapperReading.txt");
+    const message = "This is a Test";
     const fileName = "./src/test/MemMapperReading.txt";
 
-    try writeFile(fileName, message);
+    try std.Io.Dir.cwd().writeFile(testing.io, .{ .sub_path = fileName, .data = message });
 
-    var file = try std.fs.cwd().openFile(fileName, .{});
-    defer file.close();
+    var file = try std.Io.Dir.cwd().openFile(testing.io, fileName, .{});
+    defer file.close(testing.io);
 
-    var mapper = try init(file, false);
+    var mapper = try init(file, testing.io, false);
     defer mapper.deinit();
 
     const tst = try mapper.map(u8, .{});

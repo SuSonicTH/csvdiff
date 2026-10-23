@@ -9,17 +9,19 @@ const State = enum {
     searchDoubleQuote,
 };
 
-pub fn readConfigFromFile(name: []const u8, allocator: std.mem.Allocator) !std.array_list.Managed([]const u8) {
-    const file = std.fs.cwd().openFile(name, .{}) catch blk: {
+pub fn readConfigFromFile(io: std.Io, env: *const std.process.Environ.Map, name: []const u8, allocator: std.mem.Allocator) !std.array_list.Managed([]const u8) {
+    const file = std.Io.Dir.cwd().openFile(io, name, .{}) catch blk: {
         if (name[0] == '/' or name[0] == '\\') {
             return error.FileNotFound;
         }
 
-        break :blk try getConfigFileFromHome(name, allocator);
+        break :blk try getConfigFileFromHome(io, env, name, allocator);
     };
-    defer file.close();
+    defer file.close(io);
 
-    var config = try file.readToEndAlloc(allocator, 1024 * 1024);
+    var reader_buffer: [4096]u8 = undefined;
+    var file_reader = file.reader(io, &reader_buffer);
+    var config = try file_reader.interface.allocRemaining(allocator, .limited(1024 * 1024));
 
     var arguments = try std.array_list.Managed([]const u8).initCapacity(allocator, 10);
     try arguments.append(name);
@@ -167,25 +169,22 @@ inline fn moveToLeft(config: []u8, pos: usize, comptime move: u2) !void {
     }
 }
 
-fn getConfigFileFromHome(name: []const u8, allocator: std.mem.Allocator) !std.fs.File {
-    var envMap = try std.process.getEnvMap(allocator);
-    defer envMap.deinit();
-
-    if (envMap.get("CSVDIFF_CONFIG")) |config| {
-        return openConfigFile(config, "", "", name, allocator);
-    } else if (envMap.get("HOME")) |home| {
-        return openConfigFile(home, ".config/csvdiff/", "", name, allocator);
-    } else if (builtin.os.tag == .windows) {
-        if (envMap.get("homedrive")) |homedrive| {
-            if (envMap.get("homepath")) |homepath| {
-                return openConfigFile(homedrive, homepath, ".config/csvdiff/", name, allocator);
+fn getConfigFileFromHome(io: std.Io, env: *const std.process.Environ.Map, name: []const u8, allocator: std.mem.Allocator) !std.Io.File {
+    if (env.get("CSVDIFF_CONFIG")) |config| {
+        return openConfigFile(io, config, "", "", name, allocator);
+    } else if (env.get("HOME")) |home| {
+        return openConfigFile(io, home, ".config/csvdiff/", "", name, allocator);
+    } else if (builtin.target.os.tag == .windows) {
+        if (env.get("homedrive")) |homedrive| {
+            if (env.get("homepath")) |homepath| {
+                return openConfigFile(io, homedrive, homepath, ".config/csvdiff/", name, allocator);
             }
         }
     }
     return error.ReadingConfig;
 }
 
-fn openConfigFile(home: []const u8, sub1: []const u8, sub2: []const u8, name: []const u8, allocator: std.mem.Allocator) !std.fs.File {
+fn openConfigFile(io: std.Io, home: []const u8, sub1: []const u8, sub2: []const u8, name: []const u8, allocator: std.mem.Allocator) !std.Io.File {
     var path = try std.array_list.Managed(u8).initCapacity(allocator, home.len + sub1.len + sub2.len + name.len + 3);
     defer path.deinit();
 
@@ -206,14 +205,18 @@ fn openConfigFile(home: []const u8, sub1: []const u8, sub2: []const u8, name: []
 
     try path.appendSlice(name);
 
-    return try std.fs.cwd().openFile(path.items, .{});
+    return try std.Io.Dir.cwd().openFile(io, path.items, .{});
 }
 
 test "reads it" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = gpa.allocator();
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
 
-    const arguments = try readConfigFromFile("src/test/test.config", allocator);
+    var env = std.process.Environ.Map.init(allocator);
+    defer env.deinit();
+
+    const arguments = try readConfigFromFile(std.testing.io, &env, "src/test/test.config", allocator);
 
     const expectEqualStrings = std.testing.expectEqualStrings;
 

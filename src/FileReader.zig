@@ -1,19 +1,20 @@
 const std = @import("std");
+const runtime = @import("runtime.zig");
 const MemMapper = @import("MemMapper.zig");
 const ExitCode = @import("exitCode.zig").ExitCode;
 
 const Self = @This();
 
-file: std.fs.File,
+file: std.Io.File,
 memMapper: MemMapper,
 data: []const u8,
 pos: usize = 0,
 lines: usize = 0,
 
 pub fn init(fileName: []const u8) !Self {
-    var file = std.fs.cwd().openFile(fileName, .{}) catch |err| ExitCode.couldNotOpenInputFile.printErrorAndExit(.{ fileName, err });
-    errdefer file.close();
-    var memMapper = try MemMapper.init(file, false);
+    var file = std.Io.Dir.cwd().openFile(runtime.io, fileName, .{}) catch |err| ExitCode.couldNotOpenInputFile.printErrorAndExit(.{ fileName, err });
+    errdefer file.close(runtime.io);
+    var memMapper = try MemMapper.init(file, runtime.io, false);
     errdefer memMapper.deinit();
 
     return .{
@@ -26,7 +27,7 @@ pub fn init(fileName: []const u8) !Self {
 pub fn deinit(self: *Self) void {
     self.memMapper.unmap(self.data);
     self.memMapper.deinit();
-    self.file.close();
+    self.file.close(runtime.io);
 }
 
 pub fn getLine(self: *Self) !?[]const u8 {

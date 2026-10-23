@@ -10,8 +10,5 @@ pub fn expectEqualStringsArray(expected: []const []const u8, actual: [][]const u
 }
 
 pub fn writeFile(file_path: []const u8, data: []const u8) !void {
-    const file = try std.fs.cwd().createFile(file_path, .{});
-    defer file.close();
-
-    try file.writeAll(data);
+    try std.Io.Dir.cwd().writeFile(testing.io, .{ .sub_path = file_path, .data = data });
 }

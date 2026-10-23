@@ -21,37 +21,37 @@ On default only missmatched lines are outputed with a +,-,<,> or ~ sign. Matched
 
 ## Build requirements
 To build csvdiff you just need the zig compiler, which can be downloaded from [https://ziglang.org/download/](https://ziglang.org/download/) 
-Currently [zig](https://ziglang.org) 0.15.1 is supported, builds might break in never and will not work in older versions.
+Currently [zig](https://ziglang.org) 0.17.0 is supported, builds might break in newer versions and will not work in older versions.
 There is no installation needed, just download the package for your operating system an extract the archive and add it to your `PATH`
 
 ### Windows example
 execute following commands in a windows Command Prompt (cmd.exe)
 ```cmd
-curl https://ziglang.org/download/0.15.1/zig-x86-windows-0.15.1.zip --output zig-x86-windows-0.15.1.zip
-tar -xf zig-x86-windows-0.15.1.zip
-del zig-x86-windows-0.15.1.zip
-move zig-x86-windows-0.15.1 zig
+curl https://ziglang.org/download/0.17.0/zig-x86_64-windows-0.17.0.zip --output zig-x86_64-windows-0.17.0.zip
+tar -xf zig-x86_64-windows-0.17.0.zip
+del zig-x86_64-windows-0.17.0.zip
+move zig-x86_64-windows-0.17.0 zig
 set PATH=%cd%\zig;%PATH%
 ```
 
 ### Linux example
 execute following commands in a shell
 ```bash
-wget https://ziglang.org/download/0.14.0/zig-x86_64-linux-0.15.1.tar.xz
-tar -xf zig-x86_64-linux-0.15.1.tar.xz
-rm zig-x86_64-linux-0.15.1.tar.xz
-mv zig-x86_64-linux-0.15.1 zig
+wget https://ziglang.org/download/0.17.0/zig-x86_64-linux-0.17.0.tar.xz
+tar -xf zig-x86_64-linux-0.17.0.tar.xz
+rm zig-x86_64-linux-0.17.0.tar.xz
+mv zig-x86_64-linux-0.17.0 zig
 export PATH=$(pwd)/zig:$PATH
 ```
 
 ## Build
-If you have zig 0.14.0 installed and on your `PATH` just cd into the directory and execute `./build.sh --test`
+If you have zig 0.17.0 installed and on your `PATH` just cd into the directory and execute `./build.sh --test`
 This runs the release build and all tests and saves the executable as `./bin/csvdiff`
 
 The build.sh script needs bash, if you don't have bash you can execute the following
 ```shell
 zig build -Doptimize=ReleaseFast
-zig test src/main.zig
+zig build test
 ```
 
 ## Usage

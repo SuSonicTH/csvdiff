@@ -1,4 +1,5 @@
 const std = @import("std");
+const runtime = @import("runtime.zig");
 const Options = @import("options.zig").Options;
 const OutputFormat = @import("options.zig").OutputFormat;
 const readConfigFromFile = @import("config.zig").readConfigFromFile;
@@ -95,7 +96,7 @@ pub const Parser = struct {
                     },
                     .@"--exitCodes" => try ExitCode.printExitCodes(),
                     .@"--config" => {
-                        const arguments = try readConfigFromFile(try argumentValue(args, index, arg), allocator);
+                        const arguments = try readConfigFromFile(runtime.io, runtime.environ, try argumentValue(args, index, arg), allocator);
                         try parse(options, arguments.items, allocator);
                         skipNext();
                     },
@@ -164,7 +165,7 @@ pub const Parser = struct {
     fn printUsage() !void {
         const help = @embedFile("./USAGE.txt");
         var stdout_buffer: [1024]u8 = undefined;
-        var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+        var stdout_writer = std.Io.File.stdout().writer(runtime.io, &stdout_buffer);
         var stdout = &stdout_writer.interface;
         try stdout.writeAll(version ++ "\n" ++ help);
         try stdout.flush();
@@ -172,9 +173,9 @@ pub const Parser = struct {
     }
 
     fn printVersion() !void {
-        const license = @embedFile("./LICENSE.txt");
+        const license = @embedFile("LICENSE.txt");
         var stdout_buffer: [1024]u8 = undefined;
-        var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+        var stdout_writer = std.Io.File.stdout().writer(runtime.io, &stdout_buffer);
         var stdout = &stdout_writer.interface;
         try stdout.writeAll(version ++ "\n\n" ++ license);
         try stdout.flush();

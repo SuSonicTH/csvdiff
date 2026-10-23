@@ -1,4 +1,5 @@
 const std = @import("std");
+const runtime = @import("runtime.zig");
 
 pub const version = "csvdiff v0.1.4-beta";
 
@@ -18,7 +19,7 @@ pub const ExitCode = enum(u8) {
     genericError = 255,
 
     pub fn code(self: ExitCode) u8 {
-        return @intFromEnum(self);
+        return @backingInt(self);
     }
 
     pub fn message(self: ExitCode) []const u8 {
@@ -45,12 +46,13 @@ pub const ExitCode = enum(u8) {
 
     pub fn printExitCodes() !void {
         var stdout_buffer: [1024]u8 = undefined;
-        var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+        var stdout_writer = std.Io.File.stdout().writer(runtime.io, &stdout_buffer);
         var stdout = &stdout_writer.interface;
         _ = try stdout.print("{s}\n\nExit Codes:\n", .{version});
 
-        inline for (std.meta.fields(ExitCode)) |exitCode| {
-            try stdout.print("{d}: {s}\n", .{ exitCode.value, exitCode.name });
+        const enum_info = @typeInfo(ExitCode).@"enum";
+        inline for (enum_info.field_names, enum_info.field_values) |name, value| {
+            try stdout.print("{d}: {s}\n", .{ value, name });
         }
         try stdout.flush();
         try ExitCode.OK.exit();
@@ -58,7 +60,7 @@ pub const ExitCode = enum(u8) {
 
     fn _printErrorAndExit(comptime self: ExitCode, values: anytype) !noreturn {
         var stdout_buffer: [1024]u8 = undefined;
-        var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+        var stdout_writer = std.Io.File.stdout().writer(runtime.io, &stdout_buffer);
         var stdout = &stdout_writer.interface;
         _ = try stdout.print("{s}\n\nError #{d}: ", .{ version, self.code() });
         _ = try stdout.print(self.message(), values);
