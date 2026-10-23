@@ -3,13 +3,13 @@ Output media/csvdiff.gif
 Hide
 Type "PS1='\[\e[96m\]\\$\[\e[0m\] '"
 Enter
-Type@1ms "./build.sh"
+Type@1ms "zig build native"
 Enter
-Type@1ms "cd ./bin"
+Type@1ms "cp ./src/test/people.csv ./zig-out/bin"
 Enter
-Type@1ms "cp ../src/test/people.csv ./"
+Type@1ms "cp ./src/test/differentPeople.csv ./zig-out/bin"
 Enter
-Type@1ms "cp ../src/test/differentPeople.csv ./"
+Type@1ms "cd ./zig-out/bin"
 Enter
 
 Type@1ms "clear"

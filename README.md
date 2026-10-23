@@ -49,12 +49,19 @@ export PATH=$(pwd)/zig:$PATH
 ```
 
 ## Build
-If you have zig 0.17.0 installed and on your `PATH` just cd into the directory and execute `./build.sh --test`
-This runs the release build and all tests and saves the executable as `./bin/csvdiff`
-
-The build.sh script needs bash, if you don't have bash you can execute the following
+If you have zig 0.17.0 installed and on your `PATH` just cd into the directory and execute
 ```shell
-zig build -Doptimize=ReleaseFast
+zig build release
+```
+This builds compressed release binaries for all supported platforms and saves them to `zig-out/bin`:
+- `csvdiff-x86_64-linux`
+- `csvdiff-aarch64-linux`
+- `csvdiff-x86_64-windows.exe`
+
+For a compressed release build for just your native platform use `zig build native`, which saves the executable as `zig-out/bin/csvdiff`.
+
+To run the tests use
+```shell
 zig build test
 ```
 

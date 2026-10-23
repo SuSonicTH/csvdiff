@@ -3,7 +3,12 @@
     .version = "0.1.6",
     .fingerprint = 0xb8227bb1d495a839,
 
-    .dependencies = .{},
+    .dependencies = .{
+        .zupx = .{
+            .url = "https://github.com/SuSonicTH/zupx/archive/refs/tags/v0.2.0.tar.gz",
+            .hash = "zupx-0.2.0-rouXWVAbAAAFN_K6ds95pGAgwMm0vkUf1VPaMDRRYG3o",
+        },
+    },
 
     .paths = .{
         "build.zig",
